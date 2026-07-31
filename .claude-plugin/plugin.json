@@ -1,0 +1,13 @@
+{
+  "name": "viaisep",
+  "description": "Drive the VIAISEP AI software-engineering platform from Claude Code. Start the local FastAPI service and invoke viaisep CLI/REST APIs to build systems from requirements through TDD.",
+  "author": {
+    "name": "VIAISEP"
+  },
+  "homepage": "https://github.com/VIAISEP/viaisep",
+  "repository": "https://github.com/VIAISEP/viaisep.git",
+  "license": "MIT",
+  "commands": "./.claude/commands",
+  "skills": "./skills",
+  "agents": []
+}

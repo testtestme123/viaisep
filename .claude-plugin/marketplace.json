@@ -1,0 +1,16 @@
+{
+  "name": "viaisep",
+  "owner": {
+    "name": "VIAISEP"
+  },
+  "metadata": {
+    "description": "Drive the VIAISEP AI software-engineering platform from Claude Code. Build systems from requirements, knowledge graphs, business decision tables, and TDD-generated code."
+  },
+  "plugins": [
+    {
+      "name": "viaisep",
+      "source": "./",
+      "description": "Agent skill for driving the VIAISEP platform: start local service, manage projects, generate code, and run TDD loops."
+    }
+  ]
+}
