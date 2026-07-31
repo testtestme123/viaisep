@@ -1,0 +1,12 @@
+{
+  "classes": [
+    {"name": "Module", "description": "", "data_properties": []},
+    {"name": "SecurityCheck", "description": "安全检查节点类型", "data_properties": [{"name": "violation", "type": "string"}, {"name": "severity", "type": "string"}]},
+    {"name": "CodeReview", "description": "代码评审节点类型", "data_properties": [{"name": "axis", "type": "string"}, {"name": "severity", "type": "string"}]},
+    {"name": "DesignToken", "description": "UI 设计 Token", "data_properties": [{"name": "category", "type": "string"}, {"name": "token_key", "type": "string"}, {"name": "token_value", "type": "string"}]}
+  ],
+  "object_properties": [
+    {"name": "security_check_on", "description": "", "domain": ["SecurityCheck"], "range": ["Module", "Capability"], "constraints": []},
+    {"name": "code_review_on", "description": "", "domain": ["CodeReview"], "range": ["Module", "Capability"], "constraints": []}
+  ]
+}

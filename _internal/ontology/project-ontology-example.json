@@ -1,0 +1,86 @@
+{
+  "_comment": "示例：基于参考电商系统梳理出的项目级业务本体。extends 字段必须指向 global-meta-schema.json 中的全局类。",
+  "classes": [
+    {
+      "name": "Order",
+      "description": "客户提交的购买请求，包含商品、价格、收货地址和支付状态。",
+      "extends": "Capability",
+      "data_properties": [
+        {"name": "order_no", "type": "string", "description": "订单编号"},
+        {"name": "total_amount", "type": "decimal", "description": "订单总金额"},
+        {"name": "status", "type": "string", "description": "订单状态：pending/paid/shipped/delivered/cancelled"}
+      ]
+    },
+    {
+      "name": "Payment",
+      "description": "订单的支付记录，支持多种支付方式。",
+      "extends": "Capability",
+      "data_properties": [
+        {"name": "payment_no", "type": "string", "description": "支付流水号"},
+        {"name": "method", "type": "string", "description": "支付方式：alipay/wechat/credit_card"},
+        {"name": "amount", "type": "decimal", "description": "实际支付金额"}
+      ]
+    },
+    {
+      "name": "Inventory",
+      "description": "商品库存管理能力，负责扣减、预占和释放库存。",
+      "extends": "Capability",
+      "data_properties": [
+        {"name": "sku_id", "type": "string", "description": "库存单位 ID"},
+        {"name": "quantity", "type": "integer", "description": "可用库存数量"}
+      ]
+    },
+    {
+      "name": "DiscountRule",
+      "description": "折扣规则，用于计算订单或商品的优惠金额。",
+      "extends": "Module",
+      "data_properties": [
+        {"name": "rule_type", "type": "string", "description": "规则类型：percentage/fixed_amount/buy_x_get_y"},
+        {"name": "threshold", "type": "decimal", "description": "触发门槛金额"}
+      ]
+    },
+    {
+      "name": "OrderService",
+      "description": "订单领域服务，负责订单生命周期管理。",
+      "extends": "Module",
+      "data_properties": [
+        {"name": "language", "type": "string", "description": "实现语言，如 python/java/cpp"}
+      ]
+    },
+    {
+      "name": "PaymentService",
+      "description": "支付领域服务，负责对接支付渠道。",
+      "extends": "Module",
+      "data_properties": []
+    },
+    {
+      "name": "InventoryService",
+      "description": "库存领域服务，负责库存扣减与一致性维护。",
+      "extends": "Module",
+      "data_properties": []
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "order_contains_payment",
+      "description": "订单关联支付记录",
+      "domain": ["Order"],
+      "range": ["Payment"],
+      "extends": "depends_on"
+    },
+    {
+      "name": "order_requires_inventory",
+      "description": "下单需要锁定库存",
+      "domain": ["Order"],
+      "range": ["Inventory"],
+      "extends": "depends_on"
+    },
+    {
+      "name": "service_implements_capability",
+      "description": "服务实现业务能力",
+      "domain": ["OrderService", "PaymentService", "InventoryService"],
+      "range": ["Order", "Payment", "Inventory"],
+      "extends": "implements"
+    }
+  ]
+}

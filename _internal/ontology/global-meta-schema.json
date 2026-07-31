@@ -1,0 +1,76 @@
+{
+  "_comment": "VIAISEP 全局元模式：平台级、所有项目共享的基础类型与关系。禁止项目直接修改此文件，只能通过 ADR 流程扩展。",
+  "classes": [
+    {
+      "name": "Module",
+      "description": "可独立开发、测试、部署的代码单元，对应一个源文件或一组紧密内聚的源文件。",
+      "data_properties": [
+        {"name": "responsibility", "type": "string", "description": "模块职责描述"},
+        {"name": "layer", "type": "string", "description": "所属层级，如 frontend/backend/infrastructure"}
+      ]
+    },
+    {
+      "name": "Capability",
+      "description": "系统向用户或外部系统提供的业务能力，通常由多个 Module 协作实现。",
+      "data_properties": [
+        {"name": "actor", "type": "string", "description": "能力的使用者（用户角色或外部系统）"},
+        {"name": "value", "type": "string", "description": "能力创造的业务价值"}
+      ]
+    },
+    {
+      "name": "SecurityCheck",
+      "description": "安全检查节点类型",
+      "data_properties": [
+        {"name": "violation", "type": "string"},
+        {"name": "severity", "type": "string"}
+      ]
+    },
+    {
+      "name": "CodeReview",
+      "description": "代码评审节点类型",
+      "data_properties": [
+        {"name": "axis", "type": "string"},
+        {"name": "severity", "type": "string"}
+      ]
+    },
+    {
+      "name": "DesignToken",
+      "description": "UI 设计 Token",
+      "data_properties": [
+        {"name": "category", "type": "string"},
+        {"name": "token_key", "type": "string"},
+        {"name": "token_value", "type": "string"}
+      ]
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "depends_on",
+      "description": "模块或能力之间的依赖关系",
+      "domain": ["Module", "Capability"],
+      "range": ["Module", "Capability"],
+      "constraints": ["acyclic"]
+    },
+    {
+      "name": "implements",
+      "description": "模块实现某个业务能力",
+      "domain": ["Module"],
+      "range": ["Capability"],
+      "constraints": []
+    },
+    {
+      "name": "security_check_on",
+      "description": "安全检查针对的目标模块或能力",
+      "domain": ["SecurityCheck"],
+      "range": ["Module", "Capability"],
+      "constraints": []
+    },
+    {
+      "name": "code_review_on",
+      "description": "代码评审针对的目标模块或能力",
+      "domain": ["CodeReview"],
+      "range": ["Module", "Capability"],
+      "constraints": []
+    }
+  ]
+}

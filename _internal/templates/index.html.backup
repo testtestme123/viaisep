@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 软件工程平台 - 心智模型</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================================
+           设计系统（基于 ui-ux-pro-max · Analytics Dashboard 色板）
+           ============================================================ */
+        :root {
+            /* 配色 */
+            --color-primary: #1E40AF;
+            --color-primary-hover: #1E3A8A;
+            --color-secondary: #3B82F6;
+            --color-secondary-hover: #2563EB;
+            --color-accent: #D97706;
+            --color-bg: #F8FAFC;
+            --color-card: #FFFFFF;
+            --color-muted: #E9EEF6;
+            --color-muted-fg: #64748B;
+            --color-border: #DBEAFE;
+            --color-border-strong: #94A3B8;
+            --color-fg: #1E3A8A;
+            --color-fg-body: #1f2937;
+            --color-destructive: #DC2626;
+            --color-success: #16A34A;
+            --color-warning: #D97706;
+
+            /* 字体 */
+            --font-sans: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            --font-mono: 'Fira Code', 'Consolas', 'Monaco', monospace;
+
+            /* 间距 */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.5rem;
+            --space-6: 2rem;
+
+            /* 圆角 */
+            --radius-sm: 4px;
+            --radius: 8px;
+            --radius-lg: 12px;
+
+            /* 阴影 */
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+            --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.07), 0 2px 4px rgba(15, 23, 42, 0.06);
+            --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.1), 0 4px 6px rgba(15, 23, 42, 0.05);
+
+            /* 过渡 */
+            --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+            /* 头部高度 */
+            --header-h: 64px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--color-bg);
+            color: var(--color-fg-body);
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; background-clip: content-box; }
+        * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+
+        /* ============================================================
+           Header
+           ============================================================ */
+        header {
+            background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
+            color: #fff;
+            padding: 0 var(--space-5);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: var(--header-h);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+            position: relative;
+            z-index: 100;
+            gap: var(--space-4);
+        }
+        header h1 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            white-space: nowrap;
+        }
+        header h1 .brand-icon {
+            width: 22px; height: 22px;
+            color: #60A5FA;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            flex: 1;
+            justify-content: flex-end;
+        }
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: 0 var(--space-3);
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .tool-group:last-child { border-right: none; padding-right: 0; }
+        .tool-group:first-child { padding-left: 0; }
+
+        /* ============================================================
+           按钮
+           ============================================================ */
+        .btn {
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #E2E8F0;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8125rem;
+            font-family: var(--font-sans);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+            transition: background var(--transition), border-color var(--transition), color var(--transition), transform var(--transition);
+            white-space: nowrap;
+            line-height: 1.2;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.35);
+            color: #fff;
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn:focus-visible {
+            outline: 2px solid #60A5FA;
+            outline-offset: 2px;
+        }
+        .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+        .btn-primary {
+            background: var(--color-secondary);
+            color: #fff;
+            border-color: var(--color-secondary);
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+        }
+        .btn-primary:hover {
+            background: var(--color-secondary-hover);
+            border-color: var(--color-secondary-hover);
+            color: #fff;
+        }
+
+        .btn.active {
+            background: var(--color-secondary);
+            color: #fff;
+            border-color: var(--color-secondary);
+        }
+
+        /* header 内的输入框 / select */
+        header select.btn {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right var(--space-2) center;
+            padding-right: var(--space-5);
+            cursor: pointer;
+            color: #E2E8F0;
+        }
+        header select.btn option { color: #1f2937; background: #fff; }
+        header input[type="text"] {
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border-radius: var(--radius-sm);
+            font-size: 0.8125rem;
+            font-family: var(--font-sans);
+            transition: border-color var(--transition), background var(--transition);
+        }
+        header input[type="text"]::placeholder { color: #94A3B8; }
+        header input[type="text"]:focus {
+            outline: none;
+            border-color: #60A5FA;
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        /* ============================================================
+           主体布局
+           ============================================================ */
+        main {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-4);
+            padding: var(--space-4);
+            height: calc(100vh - var(--header-h));
+        }
+        main.advanced { grid-template-columns: 300px 2fr 1fr; }
+
+        .panel {
+            background: var(--color-card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .panel-header {
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--color-border);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--color-fg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--space-2);
+            background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+        }
+        .panel-header .hint {
+            font-size: 0.75rem;
+            color: var(--color-muted-fg);
+            font-weight: 400;
+        }
+
+        /* ============================================================
+           画布
+           ============================================================ */
+        #graph-canvas {
+            flex: 1;
+            background-color: #FAFBFC;
+            background-image: radial-gradient(circle, #CBD5E1 1px, transparent 1px);
+            background-size: 20px 20px;
+            cursor: grab;
+            position: relative;
+        }
+        #graph-canvas:active { cursor: grabbing; }
+
+        /* ============================================================
+           图例（决策 5：右上角常驻可折叠）
+           ============================================================ */
+        .graph-legend {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            font-size: 0.75rem;
+            z-index: 10;
+            max-width: 168px;
+            backdrop-filter: blur(4px);
+        }
+        .legend-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--color-fg);
+            user-select: none;
+        }
+        .legend-toggle {
+            transition: transform var(--transition);
+            font-size: 0.625rem;
+            color: var(--color-muted-fg);
+        }
+        .graph-legend.collapsed .legend-toggle { transform: rotate(-90deg); }
+        .graph-legend.collapsed .legend-body { display: none; }
+        .legend-body { padding: 4px 10px 8px; }
+        .legend-section { margin-bottom: 6px; }
+        .legend-section:last-child { margin-bottom: 0; }
+        .legend-title {
+            font-weight: 600;
+            color: var(--color-muted-fg);
+            margin-bottom: 3px;
+            font-size: 0.6875rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 0;
+            color: var(--color-fg-body);
+        }
+        .legend-swatch {
+            display: inline-block;
+            width: 18px;
+            height: 14px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        /* ============================================================
+           缩放控制条（左下角浮动）
+           ============================================================ */
+        .zoom-controls {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 2px;
+            z-index: 10;
+            backdrop-filter: blur(4px);
+        }
+        .zoom-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            color: var(--color-fg);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--transition);
+        }
+        .zoom-btn:hover { background: var(--color-muted); }
+        .zoom-level {
+            min-width: 42px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            color: var(--color-fg-body);
+            user-select: none;
+        }
+
+        /* ============================================================
+           视图切换 Tab
+           ============================================================ */
+        .view-tabs { display: flex; gap: var(--space-1); margin-left: auto; }
+        .view-tab {
+            padding: var(--space-1) var(--space-2);
+            font-size: 0.75rem;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--color-muted-fg);
+            border-radius: var(--radius-sm);
+        }
+        .view-tab:hover { background: var(--color-muted); color: var(--color-fg); }
+        .view-tab.active {
+            background: var(--color-primary);
+            color: #fff;
+            border-color: var(--color-primary);
+        }
+
+        .mental-model-view { display: none; flex: 1; overflow: auto; padding: var(--space-2); }
+        .mental-model-view.active { display: flex; flex-direction: column; }
+        .placeholder { padding: var(--space-6); text-align: center; color: var(--color-muted-fg); font-size: 0.875rem; }
+
+        /* ============================================================
+           状态图工具栏
+           ============================================================ */
+        .state-toolbar {
+            display: flex;
+            gap: var(--space-1);
+            padding: var(--space-1) var(--space-2);
+            border-bottom: 1px solid var(--color-border);
+            align-items: center;
+            background: var(--color-muted);
+            flex-wrap: wrap;
+        }
+        .state-toolbar .btn {
+            padding: var(--space-1) var(--space-2);
+            font-size: 0.75rem;
+            background: var(--color-card);
+            color: var(--color-fg);
+            border-color: var(--color-border);
+        }
+        .state-toolbar .btn:hover { background: var(--color-muted); color: var(--color-primary); }
+        .state-svg-container { flex: 1; overflow: auto; }
+
+        /* 锁定期间编辑按钮禁用样式 */
+        .edit-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+            filter: grayscale(0.8);
+        }
+
+        /* ============================================================
+           决策表
+           ============================================================ */
+        .decision-table-container { flex: 1; overflow: auto; padding: var(--space-2); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td {
+            border: 1px solid var(--color-border);
+            padding: var(--space-2) var(--space-3);
+            text-align: center;
+            min-width: 100px;
+            transition: background var(--transition);
+        }
+        th {
+            background: var(--color-muted);
+            font-weight: 600;
+            color: var(--color-fg);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tbody tr:hover td { background: #F8FAFC; }
+        td[contenteditable="true"] {
+            background: var(--color-card);
+            outline: none;
+            transition: background var(--transition), box-shadow var(--transition);
+        }
+        td[contenteditable="true"]:hover { background: #F0F7FF; }
+        td[contenteditable="true"]:focus {
+            background: #EFF6FF;
+            box-shadow: inset 0 0 0 2px var(--color-secondary);
+        }
+        .row-header {
+            text-align: left;
+            background: var(--color-muted);
+            font-weight: 500;
+            color: var(--color-fg);
+        }
+        .add-col, .add-row {
+            color: var(--color-primary);
+            cursor: pointer;
+            font-weight: 600;
+            transition: color var(--transition), background var(--transition);
+        }
+        .add-col:hover, .add-row:hover { color: var(--color-primary-hover); background: #EFF6FF; }
+
+        .conflict-header { background: #FEE2E2 !important; border: 1px solid var(--color-destructive) !important; color: var(--color-destructive); }
+        .conflict-cell { background: #FEE2E2; border: 1px solid var(--color-destructive); }
+        .conflict-badge { color: var(--color-destructive); margin-left: var(--space-1); }
+
+        /* ============================================================
+           右键菜单
+           ============================================================ */
+        .context-menu, .d3-context-menu {
+            position: fixed;
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            padding: var(--space-1);
+            z-index: 1000;
+            min-width: 140px;
+            display: none;
+        }
+        .context-menu-item {
+            padding: var(--space-2) var(--space-3);
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-radius: var(--radius-sm);
+            transition: background var(--transition), color var(--transition);
+        }
+        .context-menu-item:hover { background: var(--color-muted); color: var(--color-primary); }
+        .context-menu-separator { height: 1px; background: var(--color-border); margin: var(--space-1) 0; }
+
+        /* ============================================================
+           属性面板
+           ============================================================ */
+        .property-panel {
+            border-bottom: 1px solid var(--color-border);
+            max-height: 280px;
+            overflow: auto;
+            transition: max-height var(--transition-slow);
+        }
+        .property-panel.collapsed { max-height: 0; overflow: hidden; border-bottom: none; }
+        .property-field {
+            padding: var(--space-2) var(--space-3);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-1);
+            border-bottom: 1px solid var(--color-muted);
+        }
+        .property-field:last-child { border-bottom: none; }
+        .property-field label {
+            font-size: 0.7rem;
+            color: var(--color-muted-fg);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .property-field input, .property-field textarea {
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-family: var(--font-sans);
+            background: var(--color-card);
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+        .property-field input:focus, .property-field textarea:focus {
+            outline: none;
+            border-color: var(--color-secondary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .property-field textarea { resize: vertical; min-height: 60px; }
+        .property-field .readonly { padding: var(--space-1) 0; font-size: 0.8125rem; color: var(--color-fg-body); font-family: var(--font-mono); word-break: break-all; }
+        .property-list { list-style: none; padding-left: 0; font-size: 0.8125rem; }
+        .property-list li { padding: 0.15rem 0; color: var(--color-fg-body); }
+        .property-list li::before { content: "→ "; color: var(--color-secondary); }
+        .property-empty {
+            padding: var(--space-6);
+            text-align: center;
+            color: var(--color-muted-fg);
+            font-size: 0.875rem;
+        }
+
+        /* ============================================================
+           作业面板
+           ============================================================ */
+        .job-panel {
+            border-top: 1px solid var(--color-border);
+            max-height: 260px;
+            overflow: auto;
+            transition: max-height var(--transition-slow);
+            background: #FAFBFC;
+        }
+        .job-panel.collapsed { max-height: 0; overflow: hidden; border-top: none; }
+        .job-status-bar {
+            padding: var(--space-2) var(--space-3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            cursor: pointer;
+            color: var(--color-fg);
+        }
+        .job-status { font-weight: 600; }
+        .job-status.pending, .job-status.running { color: var(--color-secondary); }
+        .job-status.completed { color: var(--color-success); }
+        .job-status.failed { color: var(--color-destructive); }
+        .job-status.needs_clarification { color: var(--color-warning); }
+        .job-progress {
+            height: 4px;
+            background: var(--color-muted);
+            margin: 0 var(--space-3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .job-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-secondary), var(--color-primary));
+            transition: width var(--transition-slow);
+            border-radius: 2px;
+        }
+        .job-content { padding: var(--space-3); }
+        .job-round {
+            margin-bottom: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            background: var(--color-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+        }
+        .job-round-title {
+            font-size: 0.75rem;
+            color: var(--color-muted-fg);
+            margin-bottom: var(--space-1);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .job-check { display: flex; justify-content: space-between; font-size: 0.8125rem; padding: 0.15rem 0; }
+        .job-check.pass { color: var(--color-success); }
+        .job-check.fail { color: var(--color-destructive); }
+        .job-files { font-size: 0.8125rem; color: var(--color-fg-body); margin-top: var(--space-2); font-family: var(--font-mono); }
+        .job-summary {
+            font-size: 0.8125rem;
+            color: var(--color-fg-body);
+            margin-top: var(--space-2);
+            padding: var(--space-2) var(--space-3);
+            background: var(--color-muted);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--color-secondary);
+        }
+
+        /* ============================================================
+           帮助弹层
+           ============================================================ */
+        .help-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(2px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .help-overlay.visible { display: flex; }
+        .help-panel {
+            background: var(--color-card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            width: 480px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow: auto;
+            padding: var(--space-5);
+        }
+        .help-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
+        .help-header h3 { margin: 0; font-size: 1.125rem; color: var(--color-fg); }
+        .help-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--color-muted-fg);
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: var(--radius-sm);
+            transition: background var(--transition), color var(--transition);
+        }
+        .help-close:hover { background: var(--color-muted); color: var(--color-fg); }
+        .help-section { margin-bottom: var(--space-4); }
+        .help-section h4 {
+            font-size: 0.75rem;
+            color: var(--color-muted-fg);
+            margin: 0 0 var(--space-2) 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .help-item {
+            display: flex;
+            justify-content: space-between;
+            padding: var(--space-2) 0;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--color-muted);
+        }
+        .help-item:last-child { border-bottom: none; }
+        .help-key {
+            background: var(--color-muted);
+            padding: 0.15rem var(--space-2);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--color-fg);
+            border: 1px solid var(--color-border);
+        }
+
+        /* ============================================================
+           高级模式：文件树侧边栏 + 代码查看
+           ============================================================ */
+        .file-sidebar { display: none; flex-direction: column; overflow: hidden; }
+        .file-sidebar.visible { display: flex; }
+        .file-tree-container {
+            flex: 1;
+            overflow: auto;
+            padding: var(--space-2);
+            font-size: 0.85rem;
+            min-height: 160px;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .file-tree-empty { padding: var(--space-4); text-align: center; color: var(--color-muted-fg); font-size: 0.85rem; }
+        .file-tree-item {
+            padding: var(--space-1) var(--space-2);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            white-space: nowrap;
+            user-select: none;
+            transition: background var(--transition), color var(--transition);
+        }
+        .file-tree-item:hover { background: var(--color-muted); }
+        .file-tree-item.is-dir { font-weight: 600; color: var(--color-fg); }
+        .file-tree-item.is-file { color: #4b5563; font-weight: 400; }
+        .file-tree-item.selected { background: #DBEAFE; color: var(--color-primary); }
+        .file-tree-children { margin-left: var(--space-4); }
+
+        .code-panel-header {
+            padding: var(--space-2) var(--space-3);
+            border-bottom: 1px solid var(--color-border);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--color-fg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            background: var(--color-muted);
+        }
+        .code-panel {
+            flex: 1;
+            overflow: auto;
+            background: #0F172A;
+            color: #E2E8F0;
+            padding: var(--space-3);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            line-height: 1.6;
+            min-height: 160px;
+        }
+        .code-panel pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+        .code-empty { color: #94A3B8; padding: var(--space-4); text-align: center; font-family: var(--font-sans); }
+
+        #btn-advanced-mode.active {
+            background: var(--color-success);
+            color: #fff;
+            border-color: var(--color-success);
+        }
+
+        /* ============================================================
+           响应式
+           ============================================================ */
+        @media (max-width: 1100px) {
+            main { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - var(--header-h)); }
+            main.advanced { grid-template-columns: 1fr; }
+            .panel { min-height: 320px; }
+        }
+        @media (max-width: 720px) {
+            header { flex-direction: column; height: auto; padding: var(--space-2); gap: var(--space-2); }
+            header h1 { font-size: 0.95rem; }
+            .toolbar { justify-content: flex-start; gap: var(--space-2); }
+            .tool-group { padding: 0 var(--space-2); }
+            main { padding: var(--space-2); }
+        }
+
+        /* 尊重减少动画偏好 */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>
+            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <circle cx="5" cy="5" r="2"></circle>
+                <circle cx="19" cy="5" r="2"></circle>
+                <circle cx="5" cy="19" r="2"></circle>
+                <circle cx="19" cy="19" r="2"></circle>
+                <line x1="6.5" y1="6.5" x2="10" y2="10"></line>
+                <line x1="17.5" y1="6.5" x2="14" y2="10"></line>
+                <line x1="6.5" y1="17.5" x2="10" y2="14"></line>
+                <line x1="17.5" y1="17.5" x2="14" y2="14"></line>
+            </svg>
+            AI 软件工程平台
+        </h1>
+        <div class="toolbar">
+            <div class="tool-group">
+                <select class="btn" id="project-select" title="选择项目">
+                    <option value="">-- 选择或创建项目 --</option>
+                </select>
+                <input type="text" id="new-project-id" placeholder="项目 ID" title="项目标识符">
+                <input type="text" id="new-project-name" placeholder="项目名称" title="项目显示名">
+                <button class="btn" id="btn-create-project" title="创建新项目">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    创建
+                </button>
+            </div>
+            <div class="tool-group">
+                <button class="btn edit-btn" id="btn-add-module" title="添加模块节点">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    模块
+                </button>
+                <button class="btn edit-btn" id="btn-add-capability" title="添加能力节点">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    能力
+                </button>
+            </div>
+            <div class="tool-group">
+                <input type="text" id="node-search" placeholder="搜索节点..." title="按名称搜索 (Ctrl+K)" style="width: 140px;">
+                <select class="btn" id="node-type-filter" title="按类型筛选">
+                    <option value="">全部类型</option>
+                    <option value="Module">模块</option>
+                    <option value="Capability">能力</option>
+                </select>
+                <button class="btn" id="btn-clear-search" title="清除搜索">清除</button>
+            </div>
+            <div class="tool-group">
+                <button class="btn edit-btn" id="btn-draw-edge" title="进入画边模式 (拖拽连接两节点)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+                    画边
+                </button>
+                <button class="btn" id="btn-auto-layout" title="自动布局节点">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    布局
+                </button>
+                <button class="btn" id="btn-reset-view" title="重置视图缩放与平移">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    重置
+                </button>
+            </div>
+            <div class="tool-group">
+                <button class="btn" id="btn-export" title="导出项目 JSON">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    导出
+                </button>
+                <button class="btn" id="btn-export-image" title="导出图谱为 PNG 图片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    图片
+                </button>
+                <button class="btn" id="btn-import" title="导入项目 JSON">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    导入
+                </button>
+                <input type="file" id="import-file" accept=".json" style="display:none;">
+            </div>
+            <div class="tool-group">
+                <button class="btn" id="btn-help" title="快捷键提示 (?)">?</button>
+                <button class="btn" id="btn-advanced-mode" title="切换高级模式查看生成代码">高级模式</button>
+                <button class="btn btn-primary" id="btn-generate" title="生成并验证代码">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    生成并验证
+                </button>
+            </div>
+        </div>
+    </header>
+    <!-- 项目锁定横幅 -->
+    <div id="project-lock-bar" style="display:none;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);background:#FEF3C7;border-bottom:1px solid #F59E0B;font-size:0.85rem;color:#92400E;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span>项目已锁定 — coding agent 正在生成代码，暂时禁止编辑</span>
+    </div>
+    <main id="main-container">
+        <aside class="panel file-sidebar" id="file-sidebar">
+            <div class="panel-header">
+                <span>实现模型 · 文件树</span>
+                <span id="file-tree-status" style="font-size:0.75rem;color:var(--color-muted-fg);"></span>
+            </div>
+            <div class="file-tree-container" id="file-tree">
+                <div class="file-tree-empty">切换项目后将加载文件列表</div>
+            </div>
+            <div class="code-panel-header" id="code-panel-header">
+                <span>代码查看</span>
+                <span id="code-panel-toggle" style="font-size:0.75rem;color:var(--color-muted-fg);">折叠</span>
+            </div>
+            <div class="code-panel" id="code-panel">
+                <div class="code-empty">选择文件查看内容</div>
+            </div>
+        </aside>
+        <section class="panel">
+            <div class="panel-header">
+                <span>依赖关系图</span>
+                <span class="hint">拖拽添加节点，画线建立依赖</span>
+            </div>
+            <svg id="graph-canvas"></svg>
+            <div class="graph-legend" id="graph-legend">
+                <div class="legend-header" id="legend-header">
+                    <span>图例</span>
+                    <span class="legend-toggle">▼</span>
+                </div>
+                <div class="legend-body">
+                    <div class="legend-section">
+                        <div class="legend-title">节点类型</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#f3f4f6;border:1px solid #9ca3af"></span>模块</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#dbeafe;border:1px solid #3b82f6"></span>功能</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#fee2e2;border:1px solid #ef4444"></span>安全</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#f3e8ff;border:1px solid #a855f7"></span>代码审查</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#dcfce7;border:1px solid #22c55e"></span>数据表</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#cffafe;border:1px solid #06b6d4"></span>接口</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#fed7aa;border:1px solid #f97316"></span>设计</div>
+                    </div>
+                    <div class="legend-section">
+                        <div class="legend-title">节点状态</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#fff;border:2px solid #16a34a"></span>已完成</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#fff;border:2px solid #d97706"></span>待办</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#fff;border:2px solid #dc2626"></span>失败</div>
+                    </div>
+                </div>
+            </div>
+            <div class="zoom-controls" id="zoom-controls">
+                <button class="zoom-btn" id="btn-zoom-out" title="缩小">−</button>
+                <span class="zoom-level" id="zoom-level">100%</span>
+                <button class="zoom-btn" id="btn-zoom-in" title="放大">+</button>
+                <button class="zoom-btn" id="btn-fit-view" title="适应窗口">⤢</button>
+            </div>
+            <div class="job-status-bar" id="job-status-bar" style="display:none;">
+                <span>生成任务</span>
+                <span class="job-status" id="job-status-text">--</span>
+            </div>
+            <div class="job-progress" id="job-progress" style="display:none;">
+                <div class="job-progress-bar" id="job-progress-bar" style="width:0%;"></div>
+            </div>
+            <div class="job-panel collapsed" id="job-panel">
+                <div class="job-content" id="job-content">
+                    <div class="job-summary">点击"生成并验证"开始新任务</div>
+                </div>
+            </div>
+        </section>
+        <section class="panel">
+            <div class="panel-header" style="cursor:pointer;" id="property-panel-header">
+                <span>节点属性</span>
+                <span id="property-toggle" style="font-size:0.75rem;color:var(--color-muted-fg);">折叠</span>
+            </div>
+            <div class="property-panel" id="property-panel">
+                <div class="property-empty">在图谱中单击节点查看属性</div>
+            </div>
+            <div class="panel-header">
+                <span>心智模型</span>
+                <div class="view-tabs">
+                    <button class="btn view-tab active" data-view="decision-table-view">决策表</button>
+                    <button class="btn view-tab" data-view="swimlane-view">泳道图</button>
+                    <button class="btn view-tab" data-view="state-machine-view">状态图</button>
+                    <button class="btn view-tab" data-view="quality-report-view">质量报告</button>
+                    <button class="btn view-tab" data-view="decision-records-view">决策记录</button>
+                    <button class="btn view-tab" data-view="ontology-view">🧬 本体类</button>
+                </div>
+                <span id="generation-status" style="font-size:0.75rem;color:var(--color-muted-fg);"></span>
+            </div>
+            <div class="mental-model-view active decision-table-container" id="decision-table-view">
+                  <table id="decision-table">
+                    <thead>
+                        <tr id="rule-header-row">
+                            <th>条件 \ 规则</th>
+                            <th>规则 1</th>
+                            <th class="add-col" id="btn-add-rule-col">+</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rule-body">
+                        <tr>
+                            <td class="row-header" contenteditable="true">订单金额</td>
+                            <td contenteditable="true">&gt; 5000</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="row-header" contenteditable="true">用户类型</td>
+                            <td contenteditable="true">VIP</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="row-header">动作 → 调用能力</td>
+                            <td contenteditable="true">风控审核</td>
+                            <td></td>
+                        </tr>
+                        <tr class="add-row">
+                            <td colspan="3" id="btn-add-condition-row" style="color:var(--color-primary);cursor:pointer;">+ 添加条件行</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mental-model-view" id="swimlane-view" style="position:relative;">
+  <div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:0.5rem;">
+    <button class="btn" onclick="const inst = SwimlaneInstance('swimlane-view', currentProjectId); inst && inst.openImportDialog();" title="导入 JSON">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      导入
+    </button>
+    <button class="btn" onclick="const inst = SwimlaneInstance('swimlane-view', currentProjectId); inst && inst.exportToJSON();" title="导出 JSON">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      导出
+    </button>
+    <button class="btn" onclick="const inst = SwimlaneInstance('swimlane-view', currentProjectId); inst && inst.openManageLanesForm();" title="管理泳道">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="11" y="3" width="7" height="7"/><rect x="3" y="11" width="7" height="7"/></svg>
+      管理泳道
+    </button>
+  </div>
+</div>
+            <div class="mental-model-view" id="state-machine-view" style="position:relative;">
+              <div style="position:absolute;top:10px;right:10px;z-index:10;">
+                <button class="btn" onclick="StateMachineInstance('state-machine-view', currentProjectId)?.openManageForm();" title="管理状态机">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="11" y="3" width="7" height="7"/><rect x="3" y="11" width="7" height="7"/></svg>
+                  管理
+                </button>
+              </div>
+            </div>
+            <div class="mental-model-view" id="quality-report-view">
+                <div class="quality-report-empty" style="padding:var(--space-6);text-align:center;color:var(--color-muted-fg);font-size:0.875rem;">
+                    请先运行"生成并验证"以产生质量报告
+                </div>
+            </div>
+            <div class="mental-model-view" id="decision-records-view">
+                <div style="padding:var(--space-3);border-bottom:1px solid var(--color-border);display:flex;gap:var(--space-2);align-items:center;">
+                    <label style="font-size:0.85rem;color:var(--color-muted-fg);">筛选：</label>
+                    <select id="decision-level-filter" class="btn" style="padding:var(--space-1) var(--space-2);font-size:0.8rem;">
+                        <option value="">全部级别</option>
+                        <option value="task">任务决策</option>
+                        <option value="rule">规则决策</option>
+                        <option value="exception">异常决策</option>
+                    </select>
+                    <select id="decision-type-filter" class="btn" style="padding:var(--space-1) var(--space-2);font-size:0.8rem;">
+                        <option value="">全部类型</option>
+                        <option value="function_signature">函数签名</option>
+                        <option value="algorithm">算法实现</option>
+                        <option value="rule_implementation">规则实现</option>
+                        <option value="error_fix">错误修复</option>
+                    </select>
+                </div>
+                <div id="decision-records-list" style="flex:1;overflow:auto;padding:var(--space-3);">
+                    <div style="padding:var(--space-6);text-align:center;color:var(--color-muted-fg);font-size:0.875rem;">
+                        加载中...
+                    </div>
+                </div>
+            </div>
+            <div class="mental-model-view" id="ontology-view"></div>
+        </section>
+    </main>
+    <div class="context-menu" id="node-context-menu">
+        <div class="context-menu-item" data-action="rename">重命名</div>
+        <div class="context-menu-item" data-action="draw-edge">从此节点画边</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="delete" style="color:var(--color-destructive);">删除</div>
+    </div>
+    <div class="help-overlay" id="help-overlay">
+        <div class="help-panel">
+            <div class="help-header">
+                <h3>快捷键与操作提示</h3>
+                <button class="help-close" id="help-close">&times;</button>
+            </div>
+            <div class="help-section">
+                <h4>图谱操作</h4>
+                <div class="help-item"><span>移动节点</span><span class="help-key">拖拽节点</span></div>
+                <div class="help-item"><span>平移画布</span><span class="help-key">空白处拖拽 / 空格+拖拽</span></div>
+                <div class="help-item"><span>缩放画布</span><span class="help-key">滚轮</span></div>
+                <div class="help-item"><span>重命名节点</span><span class="help-key">双击节点</span></div>
+                <div class="help-item"><span>打开节点菜单</span><span class="help-key">右键节点</span></div>
+                <div class="help-item"><span>删除选中节点/边</span><span class="help-key">Delete / Backspace</span></div>
+            </div>
+            <div class="help-section">
+                <h4>画边模式</h4>
+                <div class="help-item"><span>进入/退出画边模式</span><span class="help-key">点击"画边"按钮</span></div>
+                <div class="help-item"><span>创建依赖</span><span class="help-key">源节点 → 目标节点</span></div>
+                <div class="help-item"><span>取消画边</span><span class="help-key">Esc</span></div>
+            </div>
+            <div class="help-section">
+                <h4>搜索</h4>
+                <div class="help-item"><span>聚焦搜索框</span><span class="help-key">Ctrl / Cmd + K</span></div>
+            </div>
+            <div class="help-section">
+                <h4>通用</h4>
+                <div class="help-item"><span>打开本提示</span><span class="help-key">?</span></div>
+                <div class="help-item"><span>关闭弹窗/取消</span><span class="help-key">Esc</span></div>
+            </div>
+        </div>
+    </div>
+    <!-- D3.js 用于泳道图渲染 -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="/static/export_image.js?v=5"></script>
+    <script src="/static/app.js?v=5"></script>
+    <script src="/static/ontology-crud-ext.js?v=5"></script>
+    <script src="/static/swimlane-d3.js?v=5"></script>
+    <script src="/static/statemachine-d3.js?v=5"></script>
+</body>
+</html>
