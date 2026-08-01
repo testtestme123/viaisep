@@ -1,352 +1,271 @@
 ---
 name: viaisep
-description: 驱动 VIAISEP AI 软件工程平台，用于从需求到代码的完整流水线（本体建模、知识图谱、业务规则、TDD 自动生成与验证）。
+description: Drives the VIAISEP AI software-engineering platform to build systems from requirements through TDD. Use when the user wants to create, plan, generate, or evolve a software project using the knowledge-graph and visual-interaction platform. Use when the task involves structured requirements, module dependency graphs, business decision tables, or TDD-generated code.
 ---
 
-<what-to-do>
+# VIAISEP Agent Skill
 
-## 你的角色
+## Overview
 
-你是 **VIAISEP 平台的全功能操作员**。你不是代替它的引擎生成代码，而是负责：
+VIAISEP is a local AI software-engineering platform that turns structured requirements into working code through a knowledge graph, business decision tables, and an automated TDD loop. This skill lets an agent drive VIAISEP by starting its local FastAPI service and invoking its CLI or REST API.
 
-1. **与用户对话** — 引导用户澄清需求、审核中间产物、调整设计决策
-2. **操控平台** — 启动服务、运行 CLI 命令、验证结果
-3. **解读输出** — 向用户解释本体结构、知识图谱、任务 DAG、质量门控报告
-4. **协作迭代** — 在 4 个关键暂停节点征求用户确认，确保设计不偏离用户意图
+The agent does not replace VIAISEP's engine. It acts as the operator: detecting the project context, ensuring the service is running, choosing the right VIAISEP command, and verifying the results.
 
-## 工作流程
+The agent is **also the LLM backend**. VIAISEP itself carries no LLM API key. When a command needs the LLM (plan / generate / plan_tasks / tdd / run / analyze-reference), VIAISEP writes a request file and waits; the agent answers it in-session. See [Agent LLM Backend](#agent-llm-backend-in-session-processing) below.
 
-### Step 0: 前置条件与平台认证
+## When to Use
 
-在任何操作之前，确认以下两个 Key 均已配置（二者相互独立）：
+- The user asks to "build a system" from requirements, modules, capabilities, or business rules.
+- The user wants to create a new project inside VIAISEP.
+- The user wants to generate code from a dependency graph or decision table.
+- The user wants to run TDD to implement a planned set of tasks.
+- The user wants to evolve an existing VIAISEP project (add modules, change rules, regenerate code).
+- The workspace contains a `.viaisep-project` marker file.
 
-1. **LLM Provider Key**（用于代码生成）：
+**When NOT to use:**
+- The task is a single-file change with no requirements, no modules, and no business rules. Use ordinary coding instead.
+- The user explicitly wants to work outside the VIAISEP platform (plain repo, no KG).
+
+## Prerequisites
+
+1. VIAISEP must be installed in the current Python environment:
+   ```bash
+   pip install -e .
+   ```
+2. LLM provider: **no configuration needed by default.** The skill installer writes `provider = "agent"` and `proxy_file` (system temp dir) into the platform `config.toml` when no LLM config exists. VIAISEP then routes every LLM call through proxy files, which you answer in-session (see below). This LLM provider is independent from the platform auth key. Advanced users may instead configure a direct provider:
    ```bash
    viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>
    ```
-   或直接编辑 `~/.sep/config.toml`。
-2. **平台认证 Key**（用于配额校验，创建项目/节点必需）：
+   Or edit the platform config file at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`; legacy `~/.sep` is still compatible during migration).
+3. Platform auth key must be set as an environment variable. Register and request it at <https://viaisep.jiademin2688.top>:
    ```bash
    export VIAISEP_API_KEY=<platform-key>
    ```
-   在 https://viaisep.jiademin2688.top 注册登录后申请。缺失或配额耗尽时，创建项目/节点返回 HTTP 403（`error=quota_exceeded`，含 `upgrade_url`）。
+   Creating projects and nodes fails with HTTP 403 `quota_exceeded` when this key is missing or its quota is exhausted. The LLM provider key and the platform auth key are independent — both must be configured.
 
-**配额限制**：免费/试用用户最多 3 个项目、单项目知识图谱最多 200 节点；付费订阅用户不受限制。订阅状态首次检查后缓存 1 小时，配额校验失败时会强制刷新，充值后返回重试即可立即生效。
+## Project Binding
 
-### Step 0.5: 服务就绪检查
+Before any VIAISEP command, determine the active `project_id`:
 
-在任何操作之前，确保 VIAISEP 服务正在运行：
+1. **Look for `.viaisep-project`** in the current directory, then walk up to the filesystem root.
+   - If found, read `project_id` from it. The file format is one line:
+     ```
+     project_id=ecommerce
+     ```
+2. **Fallback to directory name.** If no marker file exists, use the current directory name as `project_id`.
+3. **Sanitize.** Replace spaces with underscores, remove characters other than `a-zA-Z0-9_-`, and downcase.
 
+If neither strategy yields a valid `project_id`, ask the user for one.
+
+## Service Lifecycle
+
+VIAISEP exposes a local HTTP API. Most operations can also be performed through the `viaisep` CLI. The skill uses the CLI as the primary interface but keeps the service running so the web UI and job polling work.
+
+### Start the service
+
+1. Check whether VIAISEP is already running:
+   ```bash
+   curl -s http://127.0.0.1:8130/health
+   ```
+   Expected response: `{"status":"ok"}`.
+2. If not running, start it in the background:
+   ```bash
+   viaisep start --host 127.0.0.1 --port 8130 --no-open-browser
+   ```
+3. Wait up to 30 seconds, polling `/health` every 2 seconds, until it returns `ok`.
+4. If it still fails, report the error and stop.
+
+### Stop the service
+
+Do not stop the service unless the user explicitly asks. VIAISEP is designed to stay running so the web UI and watch mode work.
+
+## Platform Auth & Quota
+
+Quota is enforced per platform auth key (`VIAISEP_API_KEY`):
+
+- **Free/trial users**: at most **3 projects** total, and at most **200 nodes** per project knowledge graph.
+- **Paid subscribers**: unlimited projects and nodes.
+- Subscription state is fetched once from the platform (`GET /api/auth/check-subscription`) and cached for **1 hour**; when a quota check fails, the cache is force-refreshed so a just-upgraded user is served immediately on retry.
+
+When quota is exhausted the API returns **HTTP 403** with a structured body:
+
+```json
+{"detail": {"error": "quota_exceeded", "message": "...", "upgrade_url": "https://viaisep.jiademin2688.top"}}
 ```
-检查 http://127.0.0.1:8130/health
-├── {"status":"ok"} → 继续
-└── 无响应 → viaisep start --host 0.0.0.0 --port 8130 --no-open-browser
-             轮询 /health 直到就绪（最多 30 秒）
-```
 
-### Step 1: 需求分析
+The web UI intercepts these 403 responses globally and shows an upgrade dialog that opens `upgrade_url`; the page auto-refreshes when the user returns. **Agents should surface `upgrade_url` to the user instead of blindly retrying** — a retry only succeeds after the subscription becomes paid.
 
-与用户沟通确认需求，输出结构化的需求摘要：
+## Agent LLM Backend (In-Session Processing)
 
-- 系统名称和目标
-- 核心模块列表（电商系统的订单、商品、用户...）
-- 核心能力列表（风控审核、折扣计算、库存同步...）
-- 关键业务规则（满 100 减 20、VIP 免运费...）
-- 技术栈偏好（纯 Python / FastAPI + HTML）
+Commands marked `(LLM)` need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend — answer these requests in-session**, never from an external API:
 
-> 如果用户提供了需求文档，直接进入 Step 2。如果需求模糊，通过对话澄清。
+1. **Start the command in the background** so you stay free to serve requests:
+   ```bash
+   # PowerShell
+   Start-Job -ScriptBlock { viaisep plan <project_id> } | Out-Null
+   # bash
+   viaisep plan <project_id> &
+   ```
+   Or run it in a second terminal.
+2. **Poll the proxy directory** — the parent dir of `[llm].proxy_file` from `config.toml` (installer default: system temp dir, e.g. `C:/Users/<user>/AppData/Local/Temp/viaisep_agent_proxy`). Requests appear as siblings:
+   ```bash
+   ls <proxy_dir>/*.req.*
+   ```
+3. For each request file, read the JSON, answer with your own LLM session, then write the response:
+   - Request: `{"request_id": "...", "messages": [...], "system": "...", "model": "..."}`
+   - Response: write to the same path with `.req.` replaced by `.resp.`, payload `{"content": "...", "request_id": "..."}`.
+   - **File-name rule is single-source of truth**: `req = {proxy_file}.req.{request_id}`, `resp = {proxy_file}.resp.{request_id}`. The only authoritative implementation is `src/llm/agent_provider.proxy_request_path` / `proxy_response_path` — never hand-craft these names, or the CLI will silently never find your response.
+4. Continue polling until the command exits, then verify the artifacts (Step 6).
 
-### Step 2: 项目初始化 (init)
+If a request cannot be answered (e.g. missing context), write an explicit explanation as `content` — a real response beats a timeout. If a command seems stuck, check for a waiting `.req` file and answer it.
+
+## Core Process
+
+### Step 1: Ensure project context
+
+- Resolve `project_id` using the project-binding rules above.
+- `viaisep init` (and `viaisep run`, whose first step is init) writes `.viaisep-project` and registers the current directory as the project's code root automatically — run it from the user's project folder so generated code lands there (ADR-0040).
+
+### Step 2: Ensure service is reachable
+
+- Run the service-lifecycle check.
+- If VIAISEP is not installed or not configured, guide the user through installation and `viaisep config` before proceeding.
+
+### Step 3: Choose the command
+
+Map the user's intent to one of the VIAISEP commands:
+
+| User intent | Command | Notes |
+|---|---|---|
+| "Create a project" / "Start from requirements" | `viaisep init <project_id>` | Creates project DB and workspace. Use `--requirements <path>` to skip the interview. |
+| "Generate ontology" / "Plan the domain" | `viaisep plan <project_id>` | `(LLM)` Requires `requirements.json`. |
+| "Write KG nodes" / "Seed modules and capabilities" | `viaisep generate <project_id>` | `(LLM)` Requires `requirements.json`. |
+| "Break into tasks" | `viaisep plan_tasks <project_id>` | `(LLM)` Produces `<project_id>_plan.json`. |
+| "Run TDD" | `viaisep tdd <project_id>` | `(LLM)` Consumes `plan.json`. |
+| "Build everything from requirements" | `viaisep run <project_id> --requirements <path>` | `(LLM)` One-shot pipeline: init → plan → generate → plan_tasks → tdd. |
+| "Add a module/rule and regenerate" | `viaisep generate` then `viaisep plan_tasks` then `viaisep tdd` | `(LLM)` Incremental workflow. |
+| "Clarify requirements" (grill session) | `viaisep grill <project_id> [--requirements <doc.md>]` | `(LLM)` Interactive requirements interview; outputs `requirements.json`. |
+| "Analyze a reference/legacy system" | `viaisep analyze-reference <project_id> --source <text\|path\|url> [--type external\|legacy]` | `(LLM)` Imports domain model, modules, and rule drafts into the three databases. |
+
+`(LLM)` commands follow the [Agent LLM Backend](#agent-llm-backend-in-session-processing) flow: run in background, serve `.req` files in-session, write `.resp`, then verify.
+
+### Step 4: Prepare `requirements.json` when needed
+
+If the command needs `--requirements` and the user has not provided a file, do one of:
+
+1. Use an existing `<project_id>_requirements.json` in the current directory.
+2. If the user has described requirements in the conversation, write a minimal `requirements.json` yourself:
+   ```json
+   {
+     "name": "E-commerce Demo",
+     "description": "Online shop with users, products, orders, and cart",
+     "frontend_stack": "html-tailwind",
+     "modules": [
+       {"name": "用户服务", "description": "User registration and login", "layer": "backend"},
+       {"name": "登录页", "description": "Login page", "layer": "frontend"}
+     ],
+     "capabilities": [
+       {"name": "用户认证", "description": "Authenticate users"}
+     ],
+     "rules": [],
+     "constraints": []
+   }
+   ```
+3. Otherwise, ask the user for requirements before running the command.
+
+### Step 5: Execute and observe
+
+- Run the chosen `viaisep` CLI command.
+- For `(LLM)` commands, follow the [Agent LLM Backend](#agent-llm-backend-in-session-processing) flow: start the command in the background, serve `.req` files in-session, write `.resp`, and wait for the command to exit.
+- Capture stdout/stderr.
+- For long-running commands (`run`, `tdd`), stream output to the user; do not hide it.
+- If a command returns a non-zero exit code, stop and surface the error.
+- If a project/node creation returns HTTP 403 with `detail.error == "quota_exceeded"`, do **not** retry in a loop. Surface the `detail.message` and `detail.upgrade_url` to the user and wait for them to upgrade.
+
+### Step 6: Verify
+
+After each command, confirm expected artifacts:
+
+- After `init`: project DB exists at `{data_root}/data/<project_id>/project.db`; code root is either the current directory (when `init` runs inside the coding agent's project folder, per ADR-0040) or `{data_root}/workspace/<project_id>/` by default.
+- After `plan`: business ontology tables populated in project DB.
+- After `generate`: KG nodes for modules/capabilities exist; `DesignToken` node created when `frontend_stack` is set.
+- After `plan_tasks`: `<project_id>_plan.json` exists and contains a `tasks` array.
+- After `tdd` / `run`: all tasks `completed`; generated files exist under the project code root (`src/` and `tests/`).
+
+`tdd` and `run` execute the local quality gate (8 checks: pytest, ruff, mypy, bandit, knowledge-graph cycle detection, code-ontology alignment, coverage ≥ 90%, and "needs clarification" marking). If a task is left `failed`/`pending`, read the gate report before claiming success.
+
+For `(LLM)` commands, verify no `.req` file is left unanswered in the proxy directory.
+
+Use the REST API to verify when the CLI output is ambiguous:
 
 ```bash
-viaisep init <project_id> --requirements <path>
+curl -s http://127.0.0.1:8130/api/projects/<project_id>/graph
+curl -s http://127.0.0.1:8130/api/projects/<project_id>/files
 ```
 
-- 若用户未指定 project_id，按当前目录名自动生成（清洗规则：空格→_，小写，仅 a-zA-Z0-9_-）
-- 若用户有需求文档，将需求写入临时文件后传入 `--requirements`
-- 验证：检查 `~/.sep/data/<project_id>/project.db` 是否存在
-- 若返回 403 `quota_exceeded`（缺 VIAISEP_API_KEY 或配额耗尽）：**不要盲目重试**，向用户展示 `detail.message` 与 `detail.upgrade_url`，引导配置 Key 或升级套餐后重试
-- 告知用户项目已创建
-
-### Step 3: 生成本体 (plan)
-
-```bash
-viaisep plan <project_id> [--requirements <path>]
-```
-
-执行后向用户展示本体模型结构：
-
-```
-项目：电商系统
-本体类：
-  - Module（模块）：OrderService, ProductService, UserService
-  - Capability（能力）：RiskCheck, DiscountCalc, InventorySync
-  - 继承关系：RiskCheck extends SecurityCheck
-关联关系：
-  - OrderService depends_on ProductService
-  - DiscountCalc belongs_to OrderService
-```
-
-**⏸ 暂停点①：审核本体结构**
-
-向用户提问：
-- "这些模块和能力的划分符合你的预期吗？"
-- "有没有需要补充或修改的业务概念？"
-- "继承关系是否正确？"
-
-用户确认或修改后进入下一步。
-
-### Step 4: 填充知识图谱 (generate)
-
-```bash
-viaisep generate <project_id> [--requirements <path>]
-```
-
-执行后向用户展示知识图谱摘要：
-
-```
-知识图谱节点（共 12 个）：
-  ├── OrderService（Module）
-  ├── RiskCheck（Capability）
-  ├── DiscountCalc（Capability）
-  └── ...
-
-知识图谱边（共 8 条）：
-  ├── OrderService → RiskCheck（depends_on）
-  ├── OrderService → DiscountCalc（depends_on）
-  └── ...
-```
-
-**⏸ 暂停点②：审核知识图谱**
-
-向用户提问：
-- "节点和边的拓扑关系是否符合你的设计？"
-- "需要增加或删除任何依赖关系吗？"
-- "可以手动调整已有节点吗？"
-
-用户确认后进入下一步。
-
-### Step 5: 任务拆分 (plan_tasks)
-
-```bash
-viaisep plan_tasks <project_id>
-```
-
-执行后向用户展示任务 DAG：
-
-```
-任务执行顺序：
-  T1: 实现 OrderService（依赖：无）
-  T2: 实现 RiskCheck（依赖：T1）
-  T3: 实现 DiscountCalc（依赖：T1, T2）
-  T4: 实现 UserService（依赖：无）
-  ...
-```
-
-**⏸ 暂停点③：审核任务清单**
-
-向用户提问：
-- "任务优先级和依赖关系是否符合预期？"
-- "需要调整任务顺序或合并/拆分任务吗？"
-
-用户确认后进入下一步。
-
-### Step 6: 运行 TDD (tdd)
-
-```bash
-viaisep tdd <project_id>
-```
-
-在后台运行，每完成一个任务向用户报告进度：
-
-```
-  ✓ T1: OrderService 实现完成（1 次尝试）
-  ✓ T2: RiskCheck 实现完成（2 次尝试）
-  ✗ T3: DiscountCalc 实现失败（5 次尝试）
-```
-
-**⏸ 暂停点④：质量门控失败时介入**
-
-当 TDD 报告质量门控失败时，展示质量报告摘要：
-
-```
-质量门控报告（第 3 轮 - 失败）
-  ├── 失败检查：mypy（类型错误 2 处）
-  ├── 根因分析：DiscountCalc 中的折扣叠加逻辑类型标注不匹配
-  ├── 影响文件：src/discount_calc.py 第 42-48 行
-  └── 建议：检查 apply_discount 函数的返回值类型
-```
-
-此时：
-- **展示相关的业务规则** — 将失败分析与已定义的业务规则关联起来
-- **询问用户调整方向** — "需要修改业务规则还是调整类型定义？"
-- **用户在 UI 中修改规则后** → 点击"重新运行质量门控"
-- 根据用户指引重试，或标记任务为跳过并在后续手工修复
-
-全部任务完成后，展示最终总结：
-
-```
-✓ 6/8 任务成功，1 个跳过，1 个手工修复
-生成代码：
-  ├── src/order_service.py
-  ├── src/risk_check.py
-  ├── src/discount_calc.py
-  ├── tests/test_order_service.py
-  ...
-测试覆盖率：92%（超过 90% 目标）
-```
-
-### Step 7: 验收与后续
-
-- 确认用户对生成结果满意
-- 告知知识图谱位置（`~/.sep/workspace/<project_id>/`）
-- 提示后续维护方式：
-  - "如果要新增功能，回到图谱添加节点即可"
-  - "如果要在已有模块上加代码，修改规则后重新生成"
-
-## 最佳实践
-
-### 质量报告解读
-
-当质量门控失败时，按以下维度解读报告：
-
-| 失败类型 | 含义 | 用户操作建议 |
-|---------|------|------------|
-| ruff E501 | 代码行长 > 100 | 自动修复，通常无需用户介入 |
-| bandit B1xx | 安全风险（硬编码密钥等） | 检查代码中是否有敏感信息泄露 |
-| mypy 类型 | 类型标注不匹配 | 检查函数签名和返回值类型 |
-| pytest | 测试用例失败 | 检查实现逻辑是否正确 |
-| 覆盖率 < 90% | 测试覆盖不足 | 增加边界情况测试 |
-| 图环检测 | 知识图谱存在循环依赖 | 调整节点间的依赖关系 |
-| 本体对齐 | 代码引用了未定义的节点类型 | 检查本体定义是否遗漏 |
-
-### 用户交互原则
-
-- **用自然语言解释技术概念**：用户可能不是程序员，用"模块像系统的功能区域，能力像具体的功能操作"而非"Module 是实体的抽象"
-- **每个暂停点只问 1-2 个问题**：用户不是专家，太多选项会决策疲劳
-- **提供默认建议**：在暂停点给出"我建议按当前结构继续，你觉得呢？"而非只问"这样可以吗？"
-
-### 错误恢复
-
-- 任何 CLI 命令失败：展示错误输出，询问用户是否重试或调整参数
-- 服务启动失败：检查端口占用（`lsof -i :8130`），建议更换端口
-- TDD 持续失败：超过 10 次自动修复后标记为 needs_clarification，请用户介入
-
-</what-to-do>
-
-<supporting-info>
-
-## 项目绑定
-
-1. 从当前工作目录向上查找 `.viaisep-project` 标记文件。
-   - 格式：单行 `project_id=<id>`。
-2. 未找到时回退到当前目录名（清洗后）作为 project_id。
-3. 清洗：空格 → 下划线，仅保留 `a-zA-Z0-9_-`，小写。
-4. 若使用了目录名回退，在首次操作后创建 `.viaisep-project` 标记文件。
-
-## 服务生命周期管理
-
-- `viaisep start` 启动 FastAPI 服务（默认 `127.0.0.1:8130`；需局域网/外部访问时加 `--host 0.0.0.0`）
-- CLI 未提供 `viaisep stop`——服务保持运行，不需要时不要停止（下次需要还要重新启动）
-- `curl http://127.0.0.1:8130/health` 健康检查
-- 端口冲突时通过 `--port` 参数更换
-
-## CLI 命令参考
-
-| 命令 | 用途 | 参数 |
-|------|------|------|
-| `viaisep init` | 创建新项目 | `<project_id> [--requirements <path>]` |
-| `viaisep grill` | 需求澄清访谈 | `<project_id> [--requirements <doc.md>]` |
-| `viaisep plan` | 从需求生成本体 | `<project_id> [--requirements <path>]` |
-| `viaisep generate` | 从需求生成 KG | `<project_id> [--requirements <path>]` |
-| `viaisep analyze-reference` | 分析参考/待迁移系统 | `<project_id> --source <text\|path\|url> [--type external\|legacy]` |
-| `viaisep plan_tasks` | 任务拆分 DAG | `<project_id>` |
-| `viaisep tdd` | 运行 TDD 循环 | `<project_id> [--plan <plan.json>] [--max-retries <n>] [--watch]` |
-| `viaisep run` | 一键全流水线 | `<project_id> --requirements <path> [--loop]` |
-| `viaisep graphify` | 从源码提取代码图谱 | `<project_id> [--source-dir <dir>] [--sync-to-kg]` |
-| `viaisep extract-lessons` | 提取高频经验教训 | `<project_id> [--threshold <n>] [--promote]` |
-| `viaisep config` | 配置 LLM provider | `--provider/--model/--api-key/--base-url` |
-| `viaisep start` | 启动 Web UI | `[--host] [--port] [--no-open-browser]` |
-
-## 验证清单
-
-每个步骤执行后，验证以下项目：
-
-- [ ] `project_id` 已正确解析（.viaisep-project / 目录名）
-- [ ] 服务 `/health` 返回 `{"status":"ok"}`
-- [ ] 创建项目/节点前 `VIAISEP_API_KEY` 已设置
-- [ ] CLI 命令退出码为 0
-- [ ] 产物存在：`{data_root}/data/<project_id>/project.db`
-- [ ] 产物存在：`{data_root}/workspace/<project_id>/` 工作区
-- [ ] TDD 完成后存在 `plan.json` 及生成的 `src/` 和 `tests/`
-- [ ] 若使用目录名回退，已创建 `.viaisep-project` 标记文件
-
-## 数据存储路径
-
-平台数据根（data_root）定位顺序：`$VIAISEP_HOME`（显式）→ 各 Agent 数据根（`~/.trae-cn/viaisep`、`~/.claude/viaisep`、`~/.codex/viaisep`，安装脚本写入 `config.toml` 的 `[platform] data_root`）→ 旧 `~/.sep`（ADR-0038）。
-
-| 数据 | 路径 |
-|------|------|
-| 平台配置 | `{data_root}/config.toml` |
-| 项目元数据 | `{data_root}/data/projects.json` |
-| 项目数据库 | `{data_root}/data/<project_id>/project.db` |
-| 项目工作区 | `{data_root}/workspace/<project_id>/` |
-| 生成代码 | `{data_root}/workspace/<project_id>/src/` |
-| 生成测试 | `{data_root}/workspace/<project_id>/tests/` |
-
-## 质量门控层级
-
-质量门控按 4 层顺序执行：
-
-| 层级 | 检查项 | 失败含义 |
-|------|--------|---------|
-| Layer 1 | ruff + bandit | 代码风格和安全漏洞 |
-| Layer 2 | mypy | 类型标注正确性 |
-| Layer 3 | pytest + coverage (>90%) | 功能和测试覆盖 |
-| Layer 4 | 图环检测 + 本体对齐 + 代码对齐 | 架构完整性 |
-
-最多 10 次自动修复尝试，超过后标记 needs_clarification。
-
-## 常见用户场景
-
-### 场景 1：新项目从零开始
-
-```
-用户："帮我构建一个电商系统"
-Agent：→ Step 0 检查服务 → Step 1 对话澄清需求
-       → Step 2 init → Step 3 plan（⏸ 审核本体）
-       → Step 4 generate（⏸ 审核 KG）
-       → Step 5 plan_tasks（⏸ 审核任务）
-       → Step 6 tdd（⏸ 失败时介入）
-       → Step 7 验收
-```
-
-### 场景 2：增量添加功能
-
-```
-用户："在订单模块中添加一个优惠券功能"
-Agent：→ 检查现有项目 → 描述当前设计
-       → 用户确认后修改本体/KG/规则
-       → plan_tasks → tdd → 验收
-```
-
-### 场景 3：修复质量问题
-
-```
-用户："质量门控失败了，帮我看看"
-Agent：→ 读取质量报告 → 解读失败原因
-       → 展示相关规则 → 用户调整
-       → 重新运行质量门控
-```
-
-### 场景 4：配额耗尽
-
-```
-用户："创建项目时报 403 配额用尽了"
-Agent：→ 解析 403 响应体的 detail（error=quota_exceeded）
-       → 向用户展示 message 与 upgrade_url（https://viaisep.jiademin2688.top）
-       → 引导用户去充值；用户充值返回后重试，配额校验会自动强制刷新订阅状态
-       → 不盲目循环重试
-```
-
-</supporting-info>
+### Step 7: Generated code lands in the project code root
+
+VIAISEP writes generated code to the project's **code root** (ADR-0040): the current directory when `init`/`run` executes inside the coding agent's project folder, otherwise `{data_root}/workspace/<project_id>/` by default. The three-layer database always lives at `{data_root}/data/<project_id>/`, independent of the code root.
+
+When you drive VIAISEP from the user's project folder (typical for coding agents), the generated `src/` and `tests/` already appear directly in that folder — no copy step is needed, and the code is ready for git/IDE collaboration. Only when the project has no binding (platform workspace fallback) would you copy files into the user's repo, and only when the user asks; prefer symlinks for live projects so subsequent `viaisep tdd` runs stay in sync.
+
+## REST API Reference
+
+Keep these endpoints available for verification and incremental operations:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Service health check |
+| `/api/projects` | GET | List projects |
+| `/api/projects` | POST | Create a project (quota-checked, may return 403 `quota_exceeded`) |
+| `/api/projects/{id}/version` | GET | Data version (frontend polling; reload when changed) |
+| `/api/projects/{id}/graph` | GET | Get KG nodes and edges |
+| `/api/projects/{id}/graph/nodes` | POST | Create a node (quota-checked, may return 403 `quota_exceeded`) |
+| `/api/projects/{id}/rules` | GET/POST | List/create rules |
+| `/api/projects/{id}/decision-tables` | GET/POST | List/create business decision tables |
+| `/api/projects/{id}/modification-requests` | POST | Submit a modification request (selection-assistant primary path) |
+| `/api/projects/{id}/modification-requests/{rid}` | GET | Poll modification execution status |
+| `/api/projects/{id}/coverage` | GET | Coverage report |
+| `/api/projects/{id}/quality-report` | GET | Quality gate report |
+| `/api/projects/{id}/generate` | POST | Trigger generation job |
+| `/api/projects/{id}/files` | GET | List generated files |
+| `/api/jobs/{job_id}` | GET | Poll generation job status |
+
+## Common Rationalizations
+
+| Rationalization | Reality |
+|---|---|
+| "I'll just edit the code directly; VIAISEP is overkill" | If the task involves structured requirements, modules, rules, or TDD, bypassing VIAISEP loses the knowledge graph and regeneration ability. Direct edits are fine only for trivial fixes. |
+| "The service is too heavy to keep running" | VIAISEP is a local FastAPI + SQLite service. It consumes minimal resources and enables the web UI, watch mode, and job polling. Stop it only when asked. |
+| "I can guess the project_id from context" | Always use `.viaisep-project` or the directory name. Guessing creates duplicate projects and orphaned databases. |
+| "VIAISEP needs an LLM API key before anything works" | No. By default VIAISEP routes LLM calls through proxy files and you answer them in-session. A direct provider (openai/ollama) is optional. |
+| "I'll skip the verification step" | VIAISEP commands can succeed at the CLI level while producing empty or wrong artifacts. Always verify the expected output exists. |
+| "The generated code is in the platform data root, so I don't need to copy it" | If the project is bound to the user's folder (coding-agent flow), generated code is already in it. For unbound projects (platform workspace fallback), code must be reflected into the user's git repo before it can be committed or reviewed. |
+
+## Red Flags
+
+- Running VIAISEP commands without resolving `project_id` first.
+- Starting multiple `viaisep start` instances on the same port.
+- Editing generated code directly in `{data_root}/workspace/<project_id>/` without telling the user.
+- Assuming `/health` is running without checking.
+- Forgetting to create `.viaisep-project` after using the directory-name fallback.
+- Running `viaisep run` without a `requirements.json`.
+- Running quota-checked operations without `VIAISEP_API_KEY` set.
+- Retrying a 403 `quota_exceeded` in a loop instead of surfacing `upgrade_url`.
+- Running an `(LLM)` command without serving its `.req` files — the command will block until timeout.
+- Answering `.req` files from an external API instead of the in-session LLM.
+
+## Verification
+
+Before finishing any VIAISEP-driven task, confirm:
+
+- [ ] `project_id` is resolved from `.viaisep-project` or directory name.
+- [ ] VIAISEP service responds with `{"status":"ok"}` at `/health`.
+- [ ] `VIAISEP_API_KEY` is set before creating projects or nodes.
+- [ ] The chosen command returned exit code 0.
+- [ ] Expected artifacts exist (DB, workspace, plan.json, generated files).
+- [ ] For `run` / `tdd`: all tasks are `completed` and tests pass (quality gate: 8 checks, coverage ≥ 90%).
+- [ ] No 403 `quota_exceeded` was swallowed silently; `upgrade_url` was surfaced when it occurred.
+- [ ] Generated code is reflected back to the user's workspace if requested.
+- [ ] `.viaisep-project` marker file is created when directory-name fallback was used.
+- [ ] After changing the proxy protocol, LLM prompts, or the CLI pipeline: run `python scripts/e2e_mock_run.py` to confirm the full flow still passes end-to-end.

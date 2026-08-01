@@ -3,7 +3,7 @@
 Drive the VIAISEP AI software-engineering platform for the current project.
 
 Prerequisites (both keys are independent):
-1. LLM provider key: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>` (or edit `~/.sep/config.toml`).
+1. LLM provider: **none needed by default** — `provider = "agent"` routes every LLM call through proxy files that you answer in-session (see the `viaisep` skill "Agent LLM Backend"). Advanced users may configure a direct provider: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>`, or edit the platform `config.toml` at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`).
 2. Platform auth key: `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota. Free/trial users: max 3 projects, max 200 nodes per project; paid subscribers: unlimited.
 
 Before any action:
@@ -21,4 +21,4 @@ Then follow the `viaisep` skill to fulfill the user's request. Choose the approp
 - `viaisep tdd <project_id>` — run the TDD loop
 - `viaisep run <project_id> --requirements <path>` — one-shot full pipeline
 
-Always verify expected artifacts after the command and create `.viaisep-project` if the directory-name fallback was used. On HTTP 403 `quota_exceeded`, surface `detail.message` and `detail.upgrade_url` instead of retrying in a loop.
+Always verify expected artifacts after the command (project DB at `{data_root}/data/<project_id>/project.db`; generated files under the code root `src/`/`tests/` — the current directory when `init`/`run` runs in the user's folder, ADR-0040). `viaisep init`/`run` write `.viaisep-project` and register the current directory as the code root automatically. On HTTP 403 `quota_exceeded`, surface `detail.message` and `detail.upgrade_url` instead of retrying in a loop.

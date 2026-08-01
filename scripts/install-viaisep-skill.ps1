@@ -93,6 +93,7 @@ foreach ($job in $Jobs) {
 
 # Step 3.5: Initialize per-agent data root (ADR-0038)
 Write-Host "[4/5] Initializing per-agent data roots..."
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($job in $Jobs) {
     $dataRoot = "$env:USERPROFILE\$($job.HostDir)\viaisep"
     New-Item -ItemType Directory -Path "$dataRoot\data" -Force | Out-Null
@@ -100,11 +101,33 @@ foreach ($job in $Jobs) {
     $cfgPath = "$dataRoot\config.toml"
     if (-not (Test-Path $cfgPath)) {
         $cfgContent = "[platform]`r`ndata_root = `"$($dataRoot -replace '\\','/')`"`r`n"
-        Set-Content -Path $cfgPath -Value $cfgContent -Encoding UTF8
+        [System.IO.File]::WriteAllText($cfgPath, $cfgContent, $utf8NoBom)
         Write-Host "  [$($job.Name)] data root created -> $dataRoot"
     } else {
         Write-Host "  [$($job.Name)] data root exists: $dataRoot"
     }
+    # 仅缺省时写入 agent provider（零 LLM 配置，proxy 文件在系统 Temp）
+    $cfgText = Get-Content -Path $cfgPath -Raw -Encoding UTF8
+    if ($cfgText -match '(?m)^\s*provider\s*=') {
+        Write-Host "  [$($job.Name)] LLM provider already configured, skip"
+        continue
+    }
+    $proxyPath = "$($env:TEMP -replace '\\','/')/viaisep_agent_proxy"
+    if ($cfgText -match '(?m)^[ \t]*\[llm\]\r?$') {
+        $llmMatch = [regex]::Match($cfgText, '(?m)^[ \t]*\[llm\]\r?$')
+        $llmStart = $llmMatch.Index + $llmMatch.Length
+        $rest = $cfgText.Substring($llmStart)
+        $nextSec = [regex]::Match($rest, '(?m)^[ \t]*\[[A-Za-z0-9_.-]+\]')
+        $secLen = if ($nextSec.Success) { $nextSec.Index } else { $rest.Length }
+        $secText = $rest.Substring(0, $secLen)
+        $llmLines = "`nprovider = `"agent`"`nmodel = `"trae_builtin`""
+        if ($secText -notmatch '(?m)^[ \t]*proxy_file[ \t]*=') { $llmLines += "`nproxy_file = `"$proxyPath`"" }
+        $cfgText = $cfgText.Substring(0, $llmStart) + $llmLines + $cfgText.Substring($llmStart)
+    } else {
+        $cfgText = $cfgText.TrimEnd() + "`r`n`r`n[llm]`r`nprovider = `"agent`"`r`nmodel = `"trae_builtin`"`r`nproxy_file = `"$proxyPath`"`r`n"
+    }
+    [System.IO.File]::WriteAllText($cfgPath, $cfgText, $utf8NoBom)
+    Write-Host "  [$($job.Name)] agent provider config written (proxy_file: $proxyPath)"
 }
 
 # Step 3.6: Patch TRAE sandbox config - let packaged CLI bypass sandbox (viaisep* host rule)

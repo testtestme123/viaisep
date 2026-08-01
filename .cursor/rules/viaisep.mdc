@@ -16,7 +16,7 @@ You are the operator for the local VIAISEP AI software-engineering platform. Do 
 
 ## Prerequisites
 
-- LLM provider key: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>` (or edit `~/.sep/config.toml`).
+- LLM provider: **none needed by default** — `provider = "agent"` routes every LLM call through proxy files that you answer in-session (see "Agent LLM Backend" below). Advanced users may configure a direct provider: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>`, or edit the platform `config.toml` at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`; legacy `~/.sep` is compatible during migration).
 - Platform auth key (independent from the LLM key): `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota.
 
 ## Quota
@@ -31,6 +31,7 @@ You are the operator for the local VIAISEP AI software-engineering platform. Do 
    - File format: one line `project_id=<id>`.
 2. If no marker file is found, fall back to the sanitized current directory name.
 3. Sanitize: replace spaces with underscores, keep only `a-zA-Z0-9_-`, and downcase.
+4. `viaisep init` (and `viaisep run`) write `.viaisep-project` and register the current directory as the project's **code root** (ADR-0040): generated `src/`/`tests/` land directly in the user's project folder. The three-layer database always stays at `{data_root}/data/<project_id>/`.
 
 ## Service lifecycle
 
@@ -51,12 +52,16 @@ You are the operator for the local VIAISEP AI software-engineering platform. Do 
 | Run TDD loop | `viaisep tdd <project_id>` |
 | Full pipeline | `viaisep run <project_id> --requirements <path>` |
 
+## Agent LLM Backend (In-Session Processing)
+
+`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+
 ## Verification checklist
 
 - [ ] `project_id` is resolved from `.viaisep-project` or the directory name.
 - [ ] `/health` returns `{"status":"ok"}`.
 - [ ] `VIAISEP_API_KEY` is set before creating projects or nodes.
 - [ ] The chosen CLI command exits with code 0.
-- [ ] Expected artifacts exist: DB, workspace, `plan.json`, generated files.
+- [ ] Expected artifacts exist: project DB at `{data_root}/data/<project_id>/project.db` (data_root = Agent-host dir, e.g. `~/.trae-cn/viaisep`), `plan.json`, generated files under the code root (`src/` and `tests/`).
 - [ ] No 403 `quota_exceeded` was swallowed; `upgrade_url` was surfaced if it occurred.
 - [ ] `.viaisep-project` is created when the directory-name fallback was used.

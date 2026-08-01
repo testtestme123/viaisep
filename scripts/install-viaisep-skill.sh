@@ -120,6 +120,42 @@ for i in "${!NAMES[@]}"; do
     fi
 done
 
+# ---- Step 4.1: 仅缺省时写入 agent provider（零 LLM 配置，proxy 文件在系统 Temp）----
+info "Step 4.1/5: 配置 agent LLM provider（缺省时写入）..."
+PROXY_PATH="${TMPDIR:-/tmp}/viaisep_agent_proxy"
+for i in "${!NAMES[@]}"; do
+    DATA_ROOT="$HOME/${HOSTDIRS[$i]}/viaisep"
+    CFG_PATH="$DATA_ROOT/config.toml"
+    RESULT=$(python3 - "$CFG_PATH" "$PROXY_PATH" <<'PYEOF'
+import re, sys
+path, proxy = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+if re.search(r'(?m)^[ \t]*provider[ \t]*=', text):
+    print("skip")
+    sys.exit(0)
+m = re.search(r'(?m)^[ \t]*\[llm\]\r?$', text)
+if m:
+    start = m.end()
+    rest = text[start:]
+    n = re.search(r'(?m)^[ \t]*\[[A-Za-z0-9_.-]+\]', rest)
+    sec = rest if not n else rest[:n.start()]
+    lines = '\nprovider = "agent"\nmodel = "trae_builtin"'
+    if not re.search(r'(?m)^[ \t]*proxy_file[ \t]*=', sec):
+        lines += '\nproxy_file = "%s"' % proxy
+    text = text[:start] + lines + text[start:]
+else:
+    text = text.rstrip() + '\n\n[llm]\nprovider = "agent"\nmodel = "trae_builtin"\nproxy_file = "%s"\n' % proxy
+open(path, "w", encoding="utf-8").write(text)
+print("written")
+PYEOF
+    )
+    if [[ "$RESULT" == "skip" ]]; then
+        ok "[${NAMES[$i]}] LLM provider 已配置，跳过"
+    else
+        ok "[${NAMES[$i]}] agent provider 配置已写入 (proxy_file: $PROXY_PATH)"
+    fi
+done
+
 # ---- Step 4.5: TRAE 沙箱规则补丁 (viaisep* -> host) ----
 info "Step 4.5/5: 补丁 TRAE 沙箱规则 (viaisep*)..."
 if [[ " ${REQUESTED[*]} " == *" trae "* ]]; then

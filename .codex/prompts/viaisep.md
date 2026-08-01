@@ -8,7 +8,7 @@ You are the operator for the VIAISEP AI software-engineering platform (FastAPI +
 
 ## Prerequisites
 
-- LLM provider key: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>` (or edit `~/.sep/config.toml`).
+- LLM provider: **none needed by default** — `provider = "agent"` routes every LLM call through proxy files that you answer in-session (see "Agent LLM Backend" below). Advanced users may configure a direct provider: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>`, or edit the platform `config.toml` at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`; legacy `~/.sep` is compatible during migration).
 - Platform auth key (independent from the LLM key): `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota.
 
 ## Quota
@@ -40,9 +40,13 @@ You are the operator for the VIAISEP AI software-engineering platform (FastAPI +
 | Run TDD loop | `viaisep tdd <project_id>` |
 | Full pipeline | `viaisep run <project_id> --requirements <path>` |
 
+## Agent LLM Backend (In-Session Processing)
+
+`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+
 ## Always verify
 
-- Artifacts after command: project DB at `~/.sep/data/<project_id>/project.db`, workspace at `~/.sep/workspace/<project_id>/`, `plan.json`, generated files under `src/` and `tests/`.
-- Create `.viaisep-project` with `project_id=<id>` when the directory-name fallback was used.
+- Artifacts after command: project DB at `{data_root}/data/<project_id>/project.db` (data_root = Agent-host dir, e.g. `~/.trae-cn/viaisep`), `plan.json`, generated files under the code root (`src/` and `tests/`). The code root is the current directory when `init`/`run` runs inside the user's project folder (ADR-0040); otherwise it defaults to `{data_root}/workspace/<project_id>/`.
+- `viaisep init` (and `viaisep run`) write `.viaisep-project` and register the current directory as the code root automatically.
 - Stream output to the user for long-running commands.
 - On HTTP 403 `quota_exceeded`: surface `detail.message` and `detail.upgrade_url`, do not retry in a loop.

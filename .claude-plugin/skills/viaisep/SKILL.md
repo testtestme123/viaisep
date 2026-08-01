@@ -11,6 +11,8 @@ VIAISEP is a local AI software-engineering platform that turns structured requir
 
 The agent does not replace VIAISEP's engine. It acts as the operator: detecting the project context, ensuring the service is running, choosing the right VIAISEP command, and verifying the results.
 
+The agent is **also the LLM backend**. VIAISEP itself carries no LLM API key. When a command needs the LLM (plan / generate / plan_tasks / tdd / run / analyze-reference), VIAISEP writes a request file and waits; the agent answers it in-session. See [Agent LLM Backend](#agent-llm-backend-in-session-processing) below.
+
 ## When to Use
 
 - The user asks to "build a system" from requirements, modules, capabilities, or business rules.
@@ -30,11 +32,11 @@ The agent does not replace VIAISEP's engine. It acts as the operator: detecting 
    ```bash
    pip install -e .
    ```
-2. LLM provider must be configured (this is the **LLM provider key**, independent from the platform auth key):
+2. LLM provider: **no configuration needed by default.** The skill installer writes `provider = "agent"` and `proxy_file` (system temp dir) into the platform `config.toml` when no LLM config exists. VIAISEP then routes every LLM call through proxy files, which you answer in-session (see below). This LLM provider is independent from the platform auth key. Advanced users may instead configure a direct provider:
    ```bash
    viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>
    ```
-   Or edit the platform config file at the resolved data root (default `~/.sep/config.toml`).
+   Or edit the platform config file at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`; legacy `~/.sep` is still compatible during migration).
 3. Platform auth key must be set as an environment variable. Register and request it at <https://viaisep.jiademin2688.top>:
    ```bash
    export VIAISEP_API_KEY=<platform-key>
@@ -93,12 +95,36 @@ When quota is exhausted the API returns **HTTP 403** with a structured body:
 
 The web UI intercepts these 403 responses globally and shows an upgrade dialog that opens `upgrade_url`; the page auto-refreshes when the user returns. **Agents should surface `upgrade_url` to the user instead of blindly retrying** — a retry only succeeds after the subscription becomes paid.
 
+## Agent LLM Backend (In-Session Processing)
+
+Commands marked `(LLM)` need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend — answer these requests in-session**, never from an external API:
+
+1. **Start the command in the background** so you stay free to serve requests:
+   ```bash
+   # PowerShell
+   Start-Job -ScriptBlock { viaisep plan <project_id> } | Out-Null
+   # bash
+   viaisep plan <project_id> &
+   ```
+   Or run it in a second terminal.
+2. **Poll the proxy directory** — the parent dir of `[llm].proxy_file` from `config.toml` (installer default: system temp dir, e.g. `C:/Users/<user>/AppData/Local/Temp/viaisep_agent_proxy`). Requests appear as siblings:
+   ```bash
+   ls <proxy_dir>/*.req.*
+   ```
+3. For each request file, read the JSON, answer with your own LLM session, then write the response:
+   - Request: `{"request_id": "...", "messages": [...], "system": "...", "model": "..."}`
+   - Response: write to the same path with `.req.` replaced by `.resp.`, payload `{"content": "...", "request_id": "..."}`.
+   - **File-name rule is single-source of truth**: `req = {proxy_file}.req.{request_id}`, `resp = {proxy_file}.resp.{request_id}`. The only authoritative implementation is `src/llm/agent_provider.proxy_request_path` / `proxy_response_path` — never hand-craft these names, or the CLI will silently never find your response.
+4. Continue polling until the command exits, then verify the artifacts (Step 6).
+
+If a request cannot be answered (e.g. missing context), write an explicit explanation as `content` — a real response beats a timeout. If a command seems stuck, check for a waiting `.req` file and answer it.
+
 ## Core Process
 
 ### Step 1: Ensure project context
 
 - Resolve `project_id` using the project-binding rules above.
-- If the marker file is missing but the directory name is being used, offer to create `.viaisep-project` after the first successful command so future sessions are stable.
+- `viaisep init` (and `viaisep run`, whose first step is init) writes `.viaisep-project` and registers the current directory as the project's code root automatically — run it from the user's project folder so generated code lands there (ADR-0040).
 
 ### Step 2: Ensure service is reachable
 
@@ -112,14 +138,16 @@ Map the user's intent to one of the VIAISEP commands:
 | User intent | Command | Notes |
 |---|---|---|
 | "Create a project" / "Start from requirements" | `viaisep init <project_id>` | Creates project DB and workspace. Use `--requirements <path>` to skip the interview. |
-| "Generate ontology" / "Plan the domain" | `viaisep plan <project_id>` | Requires `requirements.json`. |
-| "Write KG nodes" / "Seed modules and capabilities" | `viaisep generate <project_id>` | Requires `requirements.json`. |
-| "Break into tasks" | `viaisep plan_tasks <project_id>` | Produces `<project_id>_plan.json`. |
-| "Run TDD" | `viaisep tdd <project_id>` | Consumes `plan.json`. |
-| "Build everything from requirements" | `viaisep run <project_id> --requirements <path>` | One-shot pipeline: init → plan → generate → plan_tasks → tdd. |
-| "Add a module/rule and regenerate" | `viaisep generate` then `viaisep plan_tasks` then `viaisep tdd` | Incremental workflow. |
-| "Clarify requirements" (grill session) | `viaisep grill <project_id> [--requirements <doc.md>]` | Interactive requirements interview; outputs `requirements.json`. |
-| "Analyze a reference/legacy system" | `viaisep analyze-reference <project_id> --source <text\|path\|url> [--type external\|legacy]` | Imports domain model, modules, and rule drafts into the three databases. |
+| "Generate ontology" / "Plan the domain" | `viaisep plan <project_id>` | `(LLM)` Requires `requirements.json`. |
+| "Write KG nodes" / "Seed modules and capabilities" | `viaisep generate <project_id>` | `(LLM)` Requires `requirements.json`. |
+| "Break into tasks" | `viaisep plan_tasks <project_id>` | `(LLM)` Produces `<project_id>_plan.json`. |
+| "Run TDD" | `viaisep tdd <project_id>` | `(LLM)` Consumes `plan.json`. |
+| "Build everything from requirements" | `viaisep run <project_id> --requirements <path>` | `(LLM)` One-shot pipeline: init → plan → generate → plan_tasks → tdd. |
+| "Add a module/rule and regenerate" | `viaisep generate` then `viaisep plan_tasks` then `viaisep tdd` | `(LLM)` Incremental workflow. |
+| "Clarify requirements" (grill session) | `viaisep grill <project_id> [--requirements <doc.md>]` | `(LLM)` Interactive requirements interview; outputs `requirements.json`. |
+| "Analyze a reference/legacy system" | `viaisep analyze-reference <project_id> --source <text\|path\|url> [--type external\|legacy]` | `(LLM)` Imports domain model, modules, and rule drafts into the three databases. |
+
+`(LLM)` commands follow the [Agent LLM Backend](#agent-llm-backend-in-session-processing) flow: run in background, serve `.req` files in-session, write `.resp`, then verify.
 
 ### Step 4: Prepare `requirements.json` when needed
 
@@ -148,6 +176,7 @@ If the command needs `--requirements` and the user has not provided a file, do o
 ### Step 5: Execute and observe
 
 - Run the chosen `viaisep` CLI command.
+- For `(LLM)` commands, follow the [Agent LLM Backend](#agent-llm-backend-in-session-processing) flow: start the command in the background, serve `.req` files in-session, write `.resp`, and wait for the command to exit.
 - Capture stdout/stderr.
 - For long-running commands (`run`, `tdd`), stream output to the user; do not hide it.
 - If a command returns a non-zero exit code, stop and surface the error.
@@ -157,13 +186,15 @@ If the command needs `--requirements` and the user has not provided a file, do o
 
 After each command, confirm expected artifacts:
 
-- After `init`: project DB exists at `{data_root}/data/<project_id>/project.db` and workspace at `{data_root}/workspace/<project_id>/`.
+- After `init`: project DB exists at `{data_root}/data/<project_id>/project.db`; code root is either the current directory (when `init` runs inside the coding agent's project folder, per ADR-0040) or `{data_root}/workspace/<project_id>/` by default.
 - After `plan`: business ontology tables populated in project DB.
 - After `generate`: KG nodes for modules/capabilities exist; `DesignToken` node created when `frontend_stack` is set.
 - After `plan_tasks`: `<project_id>_plan.json` exists and contains a `tasks` array.
-- After `tdd` / `run`: all tasks `completed`; generated files exist under `{data_root}/workspace/<project_id>/src/` and `tests/`.
+- After `tdd` / `run`: all tasks `completed`; generated files exist under the project code root (`src/` and `tests/`).
 
 `tdd` and `run` execute the local quality gate (8 checks: pytest, ruff, mypy, bandit, knowledge-graph cycle detection, code-ontology alignment, coverage ≥ 90%, and "needs clarification" marking). If a task is left `failed`/`pending`, read the gate report before claiming success.
+
+For `(LLM)` commands, verify no `.req` file is left unanswered in the proxy directory.
 
 Use the REST API to verify when the CLI output is ambiguous:
 
@@ -172,15 +203,11 @@ curl -s http://127.0.0.1:8130/api/projects/<project_id>/graph
 curl -s http://127.0.0.1:8130/api/projects/<project_id>/files
 ```
 
-### Step 7: Reflect artifacts back to the workspace
+### Step 7: Generated code lands in the project code root
 
-VIAISEP stores generated code under the platform data root (`{data_root}/workspace/<project_id>/`). If the user wants the code inside the current repository, copy or symlink the relevant files:
-```bash
-cp -r {data_root}/workspace/<project_id>/src/* ./src/
-cp -r {data_root}/workspace/<project_id>/tests/* ./tests/
-```
+VIAISEP writes generated code to the project's **code root** (ADR-0040): the current directory when `init`/`run` executes inside the coding agent's project folder, otherwise `{data_root}/workspace/<project_id>/` by default. The three-layer database always lives at `{data_root}/data/<project_id>/`, independent of the code root.
 
-Only do this when the user asks, and prefer symlinks for live projects so subsequent `viaisep tdd` runs stay in sync.
+When you drive VIAISEP from the user's project folder (typical for coding agents), the generated `src/` and `tests/` already appear directly in that folder — no copy step is needed, and the code is ready for git/IDE collaboration. Only when the project has no binding (platform workspace fallback) would you copy files into the user's repo, and only when the user asks; prefer symlinks for live projects so subsequent `viaisep tdd` runs stay in sync.
 
 ## REST API Reference
 
@@ -211,8 +238,9 @@ Keep these endpoints available for verification and incremental operations:
 | "I'll just edit the code directly; VIAISEP is overkill" | If the task involves structured requirements, modules, rules, or TDD, bypassing VIAISEP loses the knowledge graph and regeneration ability. Direct edits are fine only for trivial fixes. |
 | "The service is too heavy to keep running" | VIAISEP is a local FastAPI + SQLite service. It consumes minimal resources and enables the web UI, watch mode, and job polling. Stop it only when asked. |
 | "I can guess the project_id from context" | Always use `.viaisep-project` or the directory name. Guessing creates duplicate projects and orphaned databases. |
+| "VIAISEP needs an LLM API key before anything works" | No. By default VIAISEP routes LLM calls through proxy files and you answer them in-session. A direct provider (openai/ollama) is optional. |
 | "I'll skip the verification step" | VIAISEP commands can succeed at the CLI level while producing empty or wrong artifacts. Always verify the expected output exists. |
-| "The generated code is in the platform data root, so I don't need to copy it" | If the user is working in a git repo, the generated code must be reflected there before it can be committed or reviewed. |
+| "The generated code is in the platform data root, so I don't need to copy it" | If the project is bound to the user's folder (coding-agent flow), generated code is already in it. For unbound projects (platform workspace fallback), code must be reflected into the user's git repo before it can be committed or reviewed. |
 
 ## Red Flags
 
@@ -224,6 +252,8 @@ Keep these endpoints available for verification and incremental operations:
 - Running `viaisep run` without a `requirements.json`.
 - Running quota-checked operations without `VIAISEP_API_KEY` set.
 - Retrying a 403 `quota_exceeded` in a loop instead of surfacing `upgrade_url`.
+- Running an `(LLM)` command without serving its `.req` files — the command will block until timeout.
+- Answering `.req` files from an external API instead of the in-session LLM.
 
 ## Verification
 
@@ -238,3 +268,4 @@ Before finishing any VIAISEP-driven task, confirm:
 - [ ] No 403 `quota_exceeded` was swallowed silently; `upgrade_url` was surfaced when it occurred.
 - [ ] Generated code is reflected back to the user's workspace if requested.
 - [ ] `.viaisep-project` marker file is created when directory-name fallback was used.
+- [ ] After changing the proxy protocol, LLM prompts, or the CLI pipeline: run `python scripts/e2e_mock_run.py` to confirm the full flow still passes end-to-end.

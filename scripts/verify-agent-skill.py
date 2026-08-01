@@ -6,10 +6,11 @@
 规则:
     - 精确副本 (EXACT_COPIES): 哈希必须与主源完全一致
     - 成对一致 (IDENTICAL_PAIRS): 独立变体之间应相互一致 (.trae 与其全局安装副本)
-    - 仅要求存在 (REQUIRED_ONLY): 独立变体, 存在即可
+    - 内容级检查 (CONTENT_CHECKS): 独立变体无需与主源一致，但关键契约必须存在
+      （含 Agent LLM Backend 协议描述）且不得引用旧路径 (~/.sep/)
 
 退出码:
-    0 全部通过; 1 存在缺失或哈希不一致
+    0 全部通过; 1 存在缺失或哈希不一致或内容检查失败
 """
 import argparse
 import hashlib
@@ -22,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXACT_COPIES = [
     ".claude/skills/viaisep/SKILL.md",
     ".claude-plugin/skills/viaisep/SKILL.md",
+    ".opencode/skills/viaisep/SKILL.md",
 ]
 
 # 独立变体: 不与主源相同, 但成对之间应一致
@@ -29,9 +31,12 @@ IDENTICAL_PAIRS = [
     (".trae/skills/viaisep/SKILL.md", "~/.trae-cn/skills/viaisep/SKILL.md"),
 ]
 
-# 必须存在但允许内容独立的变体
-REQUIRED_ONLY = [
-    ".opencode/skills/viaisep/SKILL.md",
+# 内容级检查: (相对路径, 必须包含的子串列表, 禁止包含的子串列表)
+CONTENT_CHECKS = [
+    (".codex/prompts/viaisep.md", ["Agent LLM Backend", "proxy_*_path"], ["~/.sep/"]),
+    (".cursor/rules/viaisep.mdc", ["Agent LLM Backend", "proxy_*_path"], ["~/.sep/"]),
+    (".gemini/commands/viaisep.toml", ["Agent LLM Backend", "proxy_*_path"], ["~/.sep/"]),
+    (".trae/rules/viaisep.md", ["Agent LLM 后端", "proxy_*_path"], ["~/.sep/"]),
 ]
 
 
@@ -80,11 +85,23 @@ def main() -> int:
         if not ok:
             failures.append(rel)
 
-    for rel in REQUIRED_ONLY:
+    for rel, must_have, must_not_have in CONTENT_CHECKS:
         p = PROJECT_ROOT / rel
-        ok = p.exists()
-        print(f"{'OK  ' if ok else 'FAIL'}  {rel:<52} {'存在' if ok else '缺失'}")
-        if not ok:
+        if not p.exists():
+            print(f"FAIL  {rel:<52} 缺失")
+            failures.append(rel)
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        missing = [kw for kw in must_have if kw not in text]
+        forbidden = [kw for kw in must_not_have if kw in text]
+        status = "OK" if not missing and not forbidden else "FAIL"
+        detail = []
+        if missing:
+            detail.append(f"缺关键词: {missing}")
+        if forbidden:
+            detail.append(f"含禁止旧路径: {forbidden}")
+        print(f"{status}  {rel:<52} {' '.join(detail) if detail else '内容检查通过'}")
+        if not status == "OK":
             failures.append(rel)
 
     if failures:
