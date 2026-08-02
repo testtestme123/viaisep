@@ -13,7 +13,7 @@ You are the operator for the VIAISEP AI software-engineering platform (FastAPI +
 
 ## Quota
 
-- Free/trial users: max 3 projects, max 200 nodes per project. Paid subscribers: unlimited.
+- Free/trial users: max 3 projects, max 2000 nodes per project. Paid subscribers: unlimited.
 - 403 body: `{"detail": {"error": "quota_exceeded", "message": "...", "upgrade_url": "https://viaisep.jiademin2688.top"}}`.
 - Surface `upgrade_url` to the user instead of retrying in a loop; a retry succeeds once the subscription is paid.
 
@@ -42,7 +42,15 @@ You are the operator for the VIAISEP AI software-engineering platform (FastAPI +
 
 ## Agent LLM Backend (In-Session Processing)
 
-`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`, derived from `data_root` as `{data_root}/.agent_proxy` per ADR-0041), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+
+## Human-Turn Proxy Protocol (ADR-0042)
+
+`grill` / `init` (interactive interview) / grill inside `run --loop` also need to **ask the human a question**. They never block on stdin (agent-driven mode has no tty); they write `{proxy_file}.human_req.{uuid}` (JSON `{"request_id", "question", "context"}`) and wait for `{proxy_file}.human_resp.{uuid}` (JSON `{"answer", "request_id"}`).
+
+**Prerequisite:** set `VIAISEP_AGENT_MODE=1` before starting these commands, or the session falls back to `input()` and raises `EOFError` (no tty). Default timeout 3600s, configurable via `VIAISEP_HUMAN_TIMEOUT`.
+
+While polling the proxy dir for `.req.*`, **also poll for `*.human_req.*`** (same dir). For each: read JSON, **relay the question to the real user** (print it, ask for a reply), then write `.human_resp.{uuid}` with `{"answer": "<user reply>", "request_id": "<same id>"}`. File-name rule (single source of truth): `src/llm/agent_provider.human_*_path` — never hand-craft. If the user declines or is unavailable, write `{"answer": "done", "request_id": "..."}` so the session ends gracefully instead of timing out.
 
 ## Always verify
 

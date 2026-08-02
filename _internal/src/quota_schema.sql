@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS project_quotas (
     key_id           TEXT PRIMARY KEY REFERENCES key_mappings(key_id),
     project_count    INTEGER NOT NULL CHECK(project_count >= 0) DEFAULT 0,
     max_projects     INTEGER NOT NULL DEFAULT 3 CHECK(max_projects IN (3, -1)),
-    node_count_limit INTEGER NOT NULL DEFAULT 200 CHECK(node_count_limit >= 0),
+    node_count_limit INTEGER NOT NULL DEFAULT 2000 CHECK(node_count_limit >= 0),
     cached_plan_category TEXT,
     cache_expires_at TEXT DEFAULT (datetime('now', '+1 hour'))
 );

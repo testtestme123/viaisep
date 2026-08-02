@@ -32,7 +32,7 @@ The agent is **also the LLM backend**. VIAISEP itself carries no LLM API key. Wh
    ```bash
    pip install -e .
    ```
-2. LLM provider: **no configuration needed by default.** The skill installer writes `provider = "agent"` and `proxy_file` (system temp dir) into the platform `config.toml` when no LLM config exists. VIAISEP then routes every LLM call through proxy files, which you answer in-session (see below). This LLM provider is independent from the platform auth key. Advanced users may instead configure a direct provider:
+2. LLM provider: **no configuration needed by default.** The skill installer writes `provider = "agent"` and `model = "trae_builtin"` into the platform `config.toml` when no LLM config exists; `proxy_file` is derived from `data_root` as `{data_root}/.agent_proxy` (ADR-0041), never written to config.toml. VIAISEP then routes every LLM call through proxy files, which you answer in-session (see below). This LLM provider is independent from the platform auth key. Advanced users may instead configure a direct provider:
    ```bash
    viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>
    ```
@@ -83,7 +83,7 @@ Do not stop the service unless the user explicitly asks. VIAISEP is designed to 
 
 Quota is enforced per platform auth key (`VIAISEP_API_KEY`):
 
-- **Free/trial users**: at most **3 projects** total, and at most **200 nodes** per project knowledge graph.
+- **Free/trial users**: at most **3 projects** total, and at most **2000 nodes** per project knowledge graph.
 - **Paid subscribers**: unlimited projects and nodes.
 - Subscription state is fetched once from the platform (`GET /api/auth/check-subscription`) and cached for **1 hour**; when a quota check fails, the cache is force-refreshed so a just-upgraded user is served immediately on retry.
 
@@ -107,7 +107,7 @@ Commands marked `(LLM)` need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` a
    viaisep plan <project_id> &
    ```
    Or run it in a second terminal.
-2. **Poll the proxy directory** — the parent dir of `[llm].proxy_file` from `config.toml` (installer default: system temp dir, e.g. `C:/Users/<user>/AppData/Local/Temp/viaisep_agent_proxy`). Requests appear as siblings:
+2. **Poll the proxy directory** — the parent dir of `[llm].proxy_file` (ADR-0041: derived from `data_root` as `{data_root}/.agent_proxy`, e.g. `~/.trae-cn/viaisep/.agent_proxy`). Requests appear as siblings:
    ```bash
    ls <proxy_dir>/*.req.*
    ```
@@ -118,6 +118,21 @@ Commands marked `(LLM)` need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` a
 4. Continue polling until the command exits, then verify the artifacts (Step 6).
 
 If a request cannot be answered (e.g. missing context), write an explicit explanation as `content` — a real response beats a timeout. If a command seems stuck, check for a waiting `.req` file and answer it.
+
+### Human-Turn Proxy Protocol (ADR-0042)
+
+Commands `grill` and `init` (interactive interview), plus grill triggered inside `run --loop`, also need to **ask the human a question**. They never block on stdin (agent-driven mode has no tty); instead they write a human-turn request file and you relay it to the real user:
+
+**Prerequisite:** set `VIAISEP_AGENT_MODE=1` before starting `grill` / `init` / `run --loop` so the session routes human-turn questions through this protocol instead of `input()` (which raises `EOFError` in agent-driven mode with no tty). Default human-turn timeout is 3600s, configurable via `VIAISEP_HUMAN_TIMEOUT`.
+
+1. While polling the proxy dir for `.req.*`, **also poll for `*.human_req.*`** (same dir).
+2. For each `*.human_req.{uuid}` file, read JSON `{"request_id", "question", "context"}`:
+   - **Relay the question to the real user** — print it in your conversation, ask the user to respond.
+   - On receiving the user's answer, write `{proxy_file}.human_resp.{uuid}` with payload `{"answer": "<user reply>", "request_id": "<same id>"}`.
+3. File-name rule (single source of truth): `human_req = {proxy_file}.human_req.{request_id}`, `human_resp = {proxy_file}.human_resp.{request_id}`. Authoritative implementation: `src/llm/agent_provider.human_request_path` / `human_response_path` — never hand-craft.
+4. If the user declines or is unavailable, write `{"answer": "done", "request_id": "..."}` so the grill session ends gracefully instead of timing out (default 3600s).
+
+Both `.req` (LLM) and `.human_req` (human) files coexist in the same proxy dir; poll both in one pass.
 
 ## Core Process
 
@@ -186,7 +201,7 @@ If the command needs `--requirements` and the user has not provided a file, do o
 
 After each command, confirm expected artifacts:
 
-- After `init`: project DB exists at `{data_root}/data/<project_id>/project.db`; code root is either the current directory (when `init` runs inside the coding agent's project folder, per ADR-0040) or `{data_root}/workspace/<project_id>/` by default.
+- After `init`: project DB exists at `{code_root}/.viaisep-data/project.db` (ADR-0043: triple-store follows code root); code root is either the current directory (when `init` runs inside the coding agent's project folder, per ADR-0040) or `{data_root}/workspace/<project_id>/` by default. Legacy `{data_root}/data/<project_id>/project.db` (if any) is auto-migrated on first access; old location left for user cleanup.
 - After `plan`: business ontology tables populated in project DB.
 - After `generate`: KG nodes for modules/capabilities exist; `DesignToken` node created when `frontend_stack` is set.
 - After `plan_tasks`: `<project_id>_plan.json` exists and contains a `tasks` array.
@@ -205,7 +220,7 @@ curl -s http://127.0.0.1:8130/api/projects/<project_id>/files
 
 ### Step 7: Generated code lands in the project code root
 
-VIAISEP writes generated code to the project's **code root** (ADR-0040): the current directory when `init`/`run` executes inside the coding agent's project folder, otherwise `{data_root}/workspace/<project_id>/` by default. The three-layer database always lives at `{data_root}/data/<project_id>/`, independent of the code root.
+VIAISEP writes generated code to the project's **code root** (ADR-0040): the current directory when `init`/`run` executes inside the coding agent's project folder, otherwise `{data_root}/workspace/<project_id>/` by default. Per **ADR-0043**, the three-layer database (`project.db`) and other project-level platform assets also follow the code root, living under the hidden directory `{code_root}/.viaisep-data/` so the triple-store travels with the code for git/backup/migration consistency. Generated code is forbidden from directly reading/writing `.viaisep-data/` (must go through platform APIs); users/IDE/git are unrestricted.
 
 When you drive VIAISEP from the user's project folder (typical for coding agents), the generated `src/` and `tests/` already appear directly in that folder — no copy step is needed, and the code is ready for git/IDE collaboration. Only when the project has no binding (platform workspace fallback) would you copy files into the user's repo, and only when the user asks; prefer symlinks for live projects so subsequent `viaisep tdd` runs stay in sync.
 
@@ -254,6 +269,8 @@ Keep these endpoints available for verification and incremental operations:
 - Retrying a 403 `quota_exceeded` in a loop instead of surfacing `upgrade_url`.
 - Running an `(LLM)` command without serving its `.req` files — the command will block until timeout.
 - Answering `.req` files from an external API instead of the in-session LLM.
+- **Running `grill` / `init` (interactive) / `run --loop` without polling `*.human_req.*`** — grill will hang waiting for a human answer that never comes (ADR-0042).
+- **Answering `.human_req` files with content from the in-session LLM** — human-turn requests must be relayed to the real user, not auto-answered by the LLM.
 
 ## Verification
 

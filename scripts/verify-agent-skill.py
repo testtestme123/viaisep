@@ -33,25 +33,30 @@ IDENTICAL_PAIRS = [
 
 # 内容级检查: (相对路径, 必须包含的子串列表, 禁止包含的子串列表)
 # 关键契约: Agent LLM Backend 协议描述 + 代码根绑定 (ADR-0040)
+#           + human-turn 代理文件协议 (ADR-0042)
 CONTENT_CHECKS = [
     (
         ".codex/prompts/viaisep.md",
-        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040"],
+        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040",
+         "human_req", "human_resp", "ADR-0042", "VIAISEP_AGENT_MODE"],
         ["~/.sep/"],
     ),
     (
         ".cursor/rules/viaisep.mdc",
-        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040"],
+        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040",
+         "human_req", "human_resp", "ADR-0042", "VIAISEP_AGENT_MODE"],
         ["~/.sep/"],
     ),
     (
         ".gemini/commands/viaisep.toml",
-        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040"],
+        ["Agent LLM Backend", "proxy_*_path", "code root", "ADR-0040",
+         "human_req", "human_resp", "ADR-0042", "VIAISEP_AGENT_MODE"],
         ["~/.sep/"],
     ),
     (
         ".trae/rules/viaisep.md",
-        ["Agent LLM 后端", "proxy_*_path", "代码根", "ADR-0040"],
+        ["Agent LLM 后端", "proxy_*_path", "代码根", "ADR-0040",
+         "human_req", "human_resp", "ADR-0042", "VIAISEP_AGENT_MODE"],
         ["~/.sep/"],
     ),
 ]

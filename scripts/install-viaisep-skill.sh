@@ -28,12 +28,12 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLATFORMS="${*:-all}"
 REQUESTED=()
 if [[ "$PLATFORMS" == *"all"* ]]; then
-    REQUESTED=(trae claude codex)
+    REQUESTED=(trae claude codex cursor opencode gemini)
 else
     for p in $PLATFORMS; do
         case "$p" in
-            trae|claude|codex) REQUESTED+=("$p") ;;
-            *) err "未知平台: $p (可选: trae, claude, codex, all)"; exit 1 ;;
+            trae|claude|codex|cursor|opencode|gemini) REQUESTED+=("$p") ;;
+            *) err "未知平台: $p (可选: trae, claude, codex, cursor, opencode, gemini, all)"; exit 1 ;;
         esac
     done
 fi
@@ -91,6 +91,25 @@ for p in "${REQUESTED[@]}"; do
             TARGETS+=("$HOME/.codex/prompts/viaisep.md")
             HOSTDIRS+=(".codex")
             ;;
+        # cursor/opencode/gemini 是项目级配置，部署到当前工作目录
+        cursor)
+            NAMES+=("cursor")
+            SOURCES+=("$REPO_DIR/.cursor/rules/viaisep.mdc")
+            TARGETS+=("$PWD/.cursor/rules/viaisep.mdc")
+            HOSTDIRS+=("")
+            ;;
+        opencode)
+            NAMES+=("opencode")
+            SOURCES+=("$REPO_DIR/.opencode/skills/viaisep/SKILL.md")
+            TARGETS+=("$PWD/.opencode/skills/viaisep/SKILL.md")
+            HOSTDIRS+=("")
+            ;;
+        gemini)
+            NAMES+=("gemini")
+            SOURCES+=("$REPO_DIR/.gemini/commands/viaisep.toml")
+            TARGETS+=("$PWD/.gemini/commands/viaisep.toml")
+            HOSTDIRS+=("")
+            ;;
     esac
 done
 
@@ -109,6 +128,8 @@ done
 # ---- Step 4: 初始化各 Agent 数据根 (ADR-0038) ----
 info "Step 4/5: 初始化各 Agent 数据根..."
 for i in "${!NAMES[@]}"; do
+    # 项目级配置（cursor/opencode/gemini）无独立数据根，跳过
+    [[ -z "${HOSTDIRS[$i]}" ]] && continue
     DATA_ROOT="$HOME/${HOSTDIRS[$i]}/viaisep"
     mkdir -p "$DATA_ROOT/data" "$DATA_ROOT/workspace"
     CFG_PATH="$DATA_ROOT/config.toml"
@@ -120,15 +141,15 @@ for i in "${!NAMES[@]}"; do
     fi
 done
 
-# ---- Step 4.1: 仅缺省时写入 agent provider（零 LLM 配置，proxy 文件在系统 Temp）----
+# ---- Step 4.1: 仅缺省时写入 agent provider（ADR-0041: proxy_file 从 data_root 派生，不写入文件）----
 info "Step 4.1/5: 配置 agent LLM provider（缺省时写入）..."
-PROXY_PATH="${TMPDIR:-/tmp}/viaisep_agent_proxy"
 for i in "${!NAMES[@]}"; do
+    [[ -z "${HOSTDIRS[$i]}" ]] && continue
     DATA_ROOT="$HOME/${HOSTDIRS[$i]}/viaisep"
     CFG_PATH="$DATA_ROOT/config.toml"
-    RESULT=$(python3 - "$CFG_PATH" "$PROXY_PATH" <<'PYEOF'
+    RESULT=$(python3 - "$CFG_PATH" <<'PYEOF'
 import re, sys
-path, proxy = sys.argv[1], sys.argv[2]
+path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
 if re.search(r'(?m)^[ \t]*provider[ \t]*=', text):
     print("skip")
@@ -136,15 +157,10 @@ if re.search(r'(?m)^[ \t]*provider[ \t]*=', text):
 m = re.search(r'(?m)^[ \t]*\[llm\]\r?$', text)
 if m:
     start = m.end()
-    rest = text[start:]
-    n = re.search(r'(?m)^[ \t]*\[[A-Za-z0-9_.-]+\]', rest)
-    sec = rest if not n else rest[:n.start()]
     lines = '\nprovider = "agent"\nmodel = "trae_builtin"'
-    if not re.search(r'(?m)^[ \t]*proxy_file[ \t]*=', sec):
-        lines += '\nproxy_file = "%s"' % proxy
     text = text[:start] + lines + text[start:]
 else:
-    text = text.rstrip() + '\n\n[llm]\nprovider = "agent"\nmodel = "trae_builtin"\nproxy_file = "%s"\n' % proxy
+    text = text.rstrip() + '\n\n[llm]\nprovider = "agent"\nmodel = "trae_builtin"\n'
 open(path, "w", encoding="utf-8").write(text)
 print("written")
 PYEOF
@@ -152,7 +168,7 @@ PYEOF
     if [[ "$RESULT" == "skip" ]]; then
         ok "[${NAMES[$i]}] LLM provider 已配置，跳过"
     else
-        ok "[${NAMES[$i]}] agent provider 配置已写入 (proxy_file: $PROXY_PATH)"
+        ok "[${NAMES[$i]}] agent provider 配置已写入 (proxy_file 从 data_root 派生)"
     fi
 done
 
@@ -200,6 +216,8 @@ for i in "${!NAMES[@]}"; do
     else
         warn "[${NAMES[$i]}] 未找到: ${TARGETS[$i]}"
     fi
+    # 项目级配置无数据根，跳过数据根验证
+    [[ -z "${HOSTDIRS[$i]}" ]] && continue
     DATA_ROOT="$HOME/${HOSTDIRS[$i]}/viaisep"
     if [[ -f "$DATA_ROOT/config.toml" ]]; then
         ok "[${NAMES[$i]}] 数据根 OK: $DATA_ROOT"

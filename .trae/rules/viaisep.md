@@ -28,7 +28,7 @@ alwaysApply: false
 
 ## 配额限制
 
-- 免费/试用用户：最多 3 个项目，单个项目知识图谱最多 200 个节点；付费订阅用户不受限制。
+- 免费/试用用户：最多 3 个项目，单个项目知识图谱最多 2000 个节点；付费订阅用户不受限制。
 - 配额耗尽时接口返回 HTTP 403：`{"detail": {"error": "quota_exceeded", "message": "...", "upgrade_url": "https://viaisep.jiademin2688.top"}}`。
 - 遇到 403 `quota_exceeded`：不要盲目循环重试，向用户展示 `message` 与 `upgrade_url`，引导充值后重试（配额校验失败时会强制刷新订阅状态，充值后立即生效）。
 
@@ -53,7 +53,15 @@ alwaysApply: false
 
 ## Agent LLM 后端（会话内应答）
 
-`(LLM)` 命令（plan/generate/plan_tasks/tdd/run/analyze-reference/grill）需要 LLM。默认 VIAISEP 无 LLM Key：CLI 写入 `{proxy_file}.req.{uuid}` 并等待 `{proxy_file}.resp.{uuid}`（默认超时 600s）。**你就是 LLM 后端**——后台启动命令、轮询代理目录（`[llm].proxy_file` 的父目录）、会话内应答每个 `.req`、写 `.resp`（`{"content": "...", "request_id": "..."}`），最后验证产物。响应文件名 = 请求路径把 `.req.` 替换为 `.resp.`（唯一出处：`src/llm/agent_provider.proxy_*_path`，禁止自行拼接，否则 CLI 将静默找不到响应）。
+`(LLM)` 命令（plan/generate/plan_tasks/tdd/run/analyze-reference/grill）需要 LLM。默认 VIAISEP 无 LLM Key：CLI 写入 `{proxy_file}.req.{uuid}` 并等待 `{proxy_file}.resp.{uuid}`（默认超时 600s）。**你就是 LLM 后端**——后台启动命令、轮询代理目录（`[llm].proxy_file` 的父目录，ADR-0041 起从 `data_root` 派生为 `{data_root}/.agent_proxy`）、会话内应答每个 `.req`、写 `.resp`（`{"content": "...", "request_id": "..."}`），最后验证产物。响应文件名 = 请求路径把 `.req.` 替换为 `.resp.`（唯一出处：`src/llm/agent_provider.proxy_*_path`，禁止自行拼接，否则 CLI 将静默找不到响应）。
+
+## Human-turn 代理文件协议（ADR-0042）
+
+`grill` / `init`（交互式访谈）/ `run --loop` 内触发的 grill 还需要**向真人问一个问题**。它们绝不阻塞 stdin（agent 后台驱动无 tty），而是写 `{proxy_file}.human_req.{uuid}`（JSON `{"request_id", "question", "context"}`）并等待 `{proxy_file}.human_resp.{uuid}`（JSON `{"answer", "request_id"}`）。
+
+**前置条件：** 启动这些命令前必须 `export VIAISEP_AGENT_MODE=1`，否则会话回退到 `input()` 并抛 `EOFError`（无 tty）。默认超时 3600s，可通过 `VIAISEP_HUMAN_TIMEOUT` 配置。
+
+轮询代理目录的 `.req.*` 时，**同时轮询 `*.human_req.*`**（同目录）。对每个文件：读 JSON，**把问题转述给真实用户**（打印到会话，请求回复），然后写 `.human_resp.{uuid}`，内容 `{"answer": "<用户回复>", "request_id": "<同一 id>"}`。文件名规则唯一出处：`src/llm/agent_provider.human_*_path`，禁止自行拼接。若用户拒绝或不可用，写 `{"answer": "done", "request_id": "..."}` 让会话优雅结束而非超时。
 
 ## 验证清单
 

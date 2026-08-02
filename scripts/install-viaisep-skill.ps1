@@ -12,7 +12,7 @@
 #>
 
 param(
-    [ValidateSet("trae", "claude", "codex", "all")]
+    [ValidateSet("trae", "claude", "codex", "cursor", "opencode", "gemini", "all")]
     [string[]]$Platform = @("all")
 )
 
@@ -24,7 +24,7 @@ $RepoDir = (Get-Item $ScriptDir).Parent.FullName
 # Resolve requested platforms
 $Requested = @()
 foreach ($p in $Platform) {
-    if ($p -eq "all") { $Requested = @("trae", "claude", "codex") }
+    if ($p -eq "all") { $Requested = @("trae", "claude", "codex", "cursor", "opencode", "gemini") }
     else { $Requested += $p }
 }
 $Requested = $Requested | Select-Object -Unique
@@ -77,6 +77,31 @@ if ($Requested -contains "codex") {
         HostDir = ".codex"
     }
 }
+# cursor/opencode/gemini 是项目级配置，部署到当前工作目录（用户项目文件夹）
+if ($Requested -contains "cursor") {
+    $Jobs += @{
+        Name    = "cursor"
+        Source  = "$RepoDir\.cursor\rules\viaisep.mdc"
+        Target  = "$PWD\.cursor\rules\viaisep.mdc"
+        HostDir = ""
+    }
+}
+if ($Requested -contains "opencode") {
+    $Jobs += @{
+        Name    = "opencode"
+        Source  = "$RepoDir\.opencode\skills\viaisep\SKILL.md"
+        Target  = "$PWD\.opencode\skills\viaisep\SKILL.md"
+        HostDir = ""
+    }
+}
+if ($Requested -contains "gemini") {
+    $Jobs += @{
+        Name    = "gemini"
+        Source  = "$RepoDir\.gemini\commands\viaisep.toml"
+        Target  = "$PWD\.gemini\commands\viaisep.toml"
+        HostDir = ""
+    }
+}
 
 # Step 3: Copy files
 Write-Host "[3/5] Copying files..."
@@ -95,6 +120,8 @@ foreach ($job in $Jobs) {
 Write-Host "[4/5] Initializing per-agent data roots..."
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($job in $Jobs) {
+    # 项目级配置（cursor/opencode/gemini）无独立数据根，跳过
+    if (-not $job.HostDir) { continue }
     $dataRoot = "$env:USERPROFILE\$($job.HostDir)\viaisep"
     New-Item -ItemType Directory -Path "$dataRoot\data" -Force | Out-Null
     New-Item -ItemType Directory -Path "$dataRoot\workspace" -Force | Out-Null
@@ -106,28 +133,25 @@ foreach ($job in $Jobs) {
     } else {
         Write-Host "  [$($job.Name)] data root exists: $dataRoot"
     }
-    # 仅缺省时写入 agent provider（零 LLM 配置，proxy 文件在系统 Temp）
+    # 仅缺省时写入 agent provider（ADR-0041: proxy_file 从 data_root 派生，不写入文件）
     $cfgText = Get-Content -Path $cfgPath -Raw -Encoding UTF8
     if ($cfgText -match '(?m)^\s*provider\s*=') {
         Write-Host "  [$($job.Name)] LLM provider already configured, skip"
         continue
     }
-    $proxyPath = "$($env:TEMP -replace '\\','/')/viaisep_agent_proxy"
     if ($cfgText -match '(?m)^[ \t]*\[llm\]\r?$') {
         $llmMatch = [regex]::Match($cfgText, '(?m)^[ \t]*\[llm\]\r?$')
         $llmStart = $llmMatch.Index + $llmMatch.Length
         $rest = $cfgText.Substring($llmStart)
         $nextSec = [regex]::Match($rest, '(?m)^[ \t]*\[[A-Za-z0-9_.-]+\]')
         $secLen = if ($nextSec.Success) { $nextSec.Index } else { $rest.Length }
-        $secText = $rest.Substring(0, $secLen)
         $llmLines = "`nprovider = `"agent`"`nmodel = `"trae_builtin`""
-        if ($secText -notmatch '(?m)^[ \t]*proxy_file[ \t]*=') { $llmLines += "`nproxy_file = `"$proxyPath`"" }
         $cfgText = $cfgText.Substring(0, $llmStart) + $llmLines + $cfgText.Substring($llmStart)
     } else {
-        $cfgText = $cfgText.TrimEnd() + "`r`n`r`n[llm]`r`nprovider = `"agent`"`r`nmodel = `"trae_builtin`"`r`nproxy_file = `"$proxyPath`"`r`n"
+        $cfgText = $cfgText.TrimEnd() + "`r`n`r`n[llm]`r`nprovider = `"agent`"`r`nmodel = `"trae_builtin`"`r`n"
     }
     [System.IO.File]::WriteAllText($cfgPath, $cfgText, $utf8NoBom)
-    Write-Host "  [$($job.Name)] agent provider config written (proxy_file: $proxyPath)"
+    Write-Host "  [$($job.Name)] agent provider config written (proxy_file derived from data_root)"
 }
 
 # Step 3.6: Patch TRAE sandbox config - let packaged CLI bypass sandbox (viaisep* host rule)
@@ -171,6 +195,8 @@ foreach ($job in $Jobs) {
     } else {
         Write-Host "  [$($job.Name)] [WARN] not found: $($job.Target)" -ForegroundColor Yellow
     }
+    # 项目级配置无数据根，跳过数据根验证
+    if (-not $job.HostDir) { continue }
     $dataRoot = "$env:USERPROFILE\$($job.HostDir)\viaisep"
     if (Test-Path "$dataRoot\config.toml") {
         Write-Host "  [$($job.Name)] data root OK: $dataRoot"

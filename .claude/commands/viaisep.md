@@ -4,7 +4,7 @@ Drive the VIAISEP AI software-engineering platform for the current project.
 
 Prerequisites (both keys are independent):
 1. LLM provider: **none needed by default** — `provider = "agent"` routes every LLM call through proxy files that you answer in-session (see the `viaisep` skill "Agent LLM Backend"). Advanced users may configure a direct provider: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>`, or edit the platform `config.toml` at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`).
-2. Platform auth key: `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota. Free/trial users: max 3 projects, max 200 nodes per project; paid subscribers: unlimited.
+2. Platform auth key: `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota. Free/trial users: max 3 projects, max 2000 nodes per project; paid subscribers: unlimited.
 
 Before any action:
 1. Resolve the active `project_id` from `.viaisep-project` (search current and parent directories) or fall back to the sanitized current directory name.

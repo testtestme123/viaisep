@@ -5,7 +5,7 @@ You are the operator for the VIAISEP AI software-engineering platform in this pr
 
 Prerequisites (both keys are independent):
 1. LLM provider: **none needed by default** — `provider = "agent"` routes every LLM call through proxy files that you answer in-session (see "Agent LLM Backend" below). Advanced users may configure a direct provider: `viaisep config --provider openai --model gpt-4o-mini --api-key <llm-key>`, or edit the platform `config.toml` at the resolved data root (Agent-host dir, e.g. `~/.trae-cn/viaisep/config.toml`; legacy `~/.sep` is compatible during migration).
-2. Platform auth key: `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota. Free/trial users: max 3 projects, max 200 nodes per project; paid subscribers: unlimited.
+2. Platform auth key: `export VIAISEP_API_KEY=<platform-key>` — obtain it at https://viaisep.jiademin2688.top. Creating projects/nodes fails with HTTP 403 `quota_exceeded` if it is missing or out of quota. Free/trial users: max 3 projects, max 2000 nodes per project; paid subscribers: unlimited.
 
 Before any action:
 1. Resolve the active `project_id`:
@@ -28,7 +28,10 @@ Then fulfill the user's request by choosing the right VIAISEP command:
 - `viaisep run <project_id> --requirements <path>` — one-shot full pipeline
 
 Agent LLM Backend (In-Session Processing):
-`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+`(LLM)` commands (plan/generate/plan_tasks/tdd/run/analyze-reference/grill) need the LLM. VIAISEP writes `{proxy_file}.req.{uuid}` and waits for `{proxy_file}.resp.{uuid}` (default timeout 600s). **You are the LLM backend** — run the command in the background, poll the proxy dir (parent of `[llm].proxy_file`, derived from `data_root` as `{data_root}/.agent_proxy` per ADR-0041), answer each `.req` in-session, write `.resp` (`{"content": "...", "request_id": "..."}`), then verify artifacts. Response file name = request path with `.req.` replaced by `.resp.` — single source of truth is `src/llm/agent_provider.proxy_*_path`; never hand-craft the names.
+
+Human-Turn Proxy Protocol (ADR-0042):
+`grill` / `init` (interactive interview) / grill inside `run --loop` also need to **ask the human a question**. They never block on stdin (agent-driven mode has no tty); they write `{proxy_file}.human_req.{uuid}` (JSON `{"request_id", "question", "context"}`) and wait for `{proxy_file}.human_resp.{uuid}` (JSON `{"answer", "request_id"}`). Prerequisite: set `VIAISEP_AGENT_MODE=1` before starting these commands, or the session falls back to `input()` and raises `EOFError`. Default timeout 3600s, configurable via `VIAISEP_HUMAN_TIMEOUT`. While polling the proxy dir for `.req.*`, also poll for `*.human_req.*` (same dir); for each, relay the question to the real user, then write `.human_resp.{uuid}` with `{"answer": "<user reply>", "request_id": "<same id>"}`. File-name rule (single source of truth): `src/llm/agent_provider.human_*_path`. If the user declines or is unavailable, write `{"answer": "done", "request_id": "..."}` so the session ends gracefully.
 
 Always:
 - Verify expected artifacts after the command: project DB at `{data_root}/data/<project_id>/project.db` (data_root = Agent-host dir, e.g. `~/.trae-cn/viaisep`), `plan.json`, and generated files under the code root (`src/` and `tests/`). The code root is the current directory when `init`/`run` runs inside the user's project folder (ADR-0040); otherwise it defaults to `{data_root}/workspace/<project_id>/`.
